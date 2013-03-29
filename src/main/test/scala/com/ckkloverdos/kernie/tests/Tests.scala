@@ -16,11 +16,17 @@
 
 package com.ckkloverdos.kernie.tests
 
-import com.ckkloverdos.kernie.Kernie
-import com.ckkloverdos.resource.FileStreamResourceContext
+import com.ckkloverdos.kernie.{Binding, Kernie}
+import com.ckkloverdos.resource.{StreamResource, FileStreamResourceContext}
 import javax.inject.Inject
+import com.ckkloverdos.maybe.Maybe
 
-class BasicResources {
+trait Resources {
+  def getResource(path: String): Maybe[StreamResource]
+  def getResourceEx(path: String): StreamResource
+}
+
+class BasicResources extends Resources {
   val SlashEtcResourceContext = new FileStreamResourceContext("/etc/any")
 
   def getResource(path: String) = SlashEtcResourceContext.getResource(path)
@@ -51,7 +57,7 @@ class StoreWatcher {
 object Tests {
   def main(args: Array[String]) {
     val kernie = new Kernie(
-      new BasicResources,
+      Binding(classOf[Resources], classOf[BasicResources]),
       new StoreWatcher,
       new RollerService
     )

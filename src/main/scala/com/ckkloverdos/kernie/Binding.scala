@@ -20,9 +20,16 @@ package com.ckkloverdos.kernie
  *
  * @author Christos KK Loverdos <loverdos@gmail.com>
  */
-case class Binding[T <: AnyRef](serviceAPI: Class[T], serviceClass: Class[T]) {
-  require(serviceClass ne null, "serviceClass != null")
-  require(serviceAPI ne null, "serviceAPI != null")
-  require(!serviceClass.isInterface, "!serviceClass.isInterface")
-  require(serviceAPI.isInterface, "serviceAPI.isInterface")
+final class Binding[T](val api: Class[T], val impl: Class[_ <: T])
+
+object Binding {
+  def apply[T](api: Class[T], impl: Class[_ <: T]): Binding[T] = {
+    checkBinding(api, impl)
+    new Binding[T](api, impl)
+  }
+
+  def dynamic[A, B](api: Class[A], impl: Class[B]): Binding[_] = {
+    checkBinding(api, impl) // I need exceptions early
+    new Binding(api, impl.asSubclass(api))
+  }
 }

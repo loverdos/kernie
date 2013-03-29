@@ -19,6 +19,39 @@ package object kernie {
     }
   }
 
+  @inline
+  final def Check(condition: Boolean, format: String, args: Any*) {
+    if(!condition) throw new KernieException(format.format(args:_*))
+  }
+
+  @inline
+  final def checkBinding(api: Class[_], impl: Class[_]) {
+    Check(
+      impl ne null,
+      "Implementation for %s is null", api.getName
+    )
+
+    Check(
+      api ne null,
+      "Interface for %s is null", impl.getName
+    )
+
+    Check(
+      !impl.isInterface,
+      "Implementation %s for %s is an interface", impl.getName, api.getName
+    )
+
+    Check(
+      api.isInterface,
+      "API %s for %s is not an interface", api.getName, impl.getName
+    )
+
+    Check(
+      api.isAssignableFrom(impl),
+      "Implementation %s is incompatible with %s", impl.getName, api.getName
+    )
+  }
+
   final class LinkedSet[T] private(elems: Vector[T], set: Set[T]) {
     def this(t: T) = this(Vector(t), Set(t))
 

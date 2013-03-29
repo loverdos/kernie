@@ -293,33 +293,25 @@ class Kernie(items: AnyRef*) {
       logger.debug(format.format(serviceClasses.map(_.getSimpleName).mkString(", ")))
     }
 
-    //////////////////////
     val initialServiceInfo = _initialServiceInfoOf(services)
-    _services ++= initialServiceInfo.instances
-    _serviceByClass ++= initialServiceInfo.instanceByClass
-
     val initialServiceClasses = new mutable.LinkedHashSet[Class[_]] ++ initialServiceInfo.instanceByClass.keys
-    if(logger.isDebugEnabled()) {
-      logServices("Initial: %s", initialServiceClasses)
-    }
-
-    //////////////////////
     val dependencyInfo = _computeDependencyInfo(initialServiceClasses)
 
-    if(logger.isDebugEnabled && dependencyInfo.serviceClasses.size != initialServiceClasses.size) {
+    if(logger.isDebugEnabled()) {
+      logServices("Initial: %s", initialServiceClasses)
+
       val newServiceClasses = dependencyInfo.serviceClasses -- initialServiceClasses
       logServices("New: %s", newServiceClasses)
-    }
 
-    logger.debug("Linearized dependencies: %s".format(
-      dependencyInfo.
-        linearizedDependencies.
-        map(_.getSimpleName).
-        zipWithIndex.map{case (a, b) ⇒ (b, a)}.
-        mkString(", "))
-    )
+      logger.debug("Linearized dependencies: %s".format(
+        dependencyInfo.
+          linearizedDependencies.
+          map(_.getSimpleName).
+          zipWithIndex.map{case (a, b) ⇒ (b, a)}.
+          mkString(", "))
+      )
+    }
 
     _injectDependencies(initialServiceInfo, dependencyInfo)
   }
-
 }
