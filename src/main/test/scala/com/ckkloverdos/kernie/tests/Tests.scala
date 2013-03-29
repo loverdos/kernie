@@ -27,14 +27,22 @@ class BasicResources {
   def getResourceEx(path: String) = SlashEtcResourceContext.getResourceEx(path)
 }
 
-class AkkaService {
+class RollerService {
   @Inject var resources: BasicResources = _
 }
 
 class UserStore {
   @Inject var resources: BasicResources = _
 }
-class RCStore
+
+class StoreNestedAA
+class StoreNestedA {
+  @Inject var nestedAA: StoreNestedAA = _
+}
+
+class RCStore {
+  @Inject var nestedA: StoreNestedA = _
+}
 class StoreWatcher {
   @Inject var userStore: UserStore = _
   @Inject var rcStore: RCStore = _
@@ -45,7 +53,7 @@ object Tests {
     val kernie = new Kernie(
       new BasicResources,
       new StoreWatcher,
-      new AkkaService
+      new RollerService
     )
   }
 }

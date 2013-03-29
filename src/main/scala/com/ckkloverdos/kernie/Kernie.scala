@@ -50,32 +50,43 @@ class Kernie(items: AnyRef*) {
   def _isFieldToInject(field: Field) =
     field.getAnnotation(classOf[Inject]) ne null
 
-  // Updates _services && _serviceByClass
-  private def _initialServiceInfoOf(services: Seq[AnyRef]): InitialServiceInfo = {
-    val services = new mutable.LinkedHashSet[AnyRef]
-    val serviceByClass = new mutable.LinkedHashMap[Class[_], AnyRef]
+  private def _initialServiceInfoOf(initial: Seq[AnyRef]): InitialServiceInfo = {
+    val foundServices = new mutable.LinkedHashSet[AnyRef]
+    val foundServiceByClass = new mutable.LinkedHashMap[Class[_], AnyRef]
 
-    for(service ← services) {
-      val serviceClass = service.getClass
-
+    for((service, index) ← initial.zipWithIndex) {
       if(service eq null) {
-        throw new KernieException("Service is null")
+        val extraInfo = index match {
+          case 0 ⇒
+            ""
+          case n if n == initial.size - 1 ⇒
+            " (the last one)"
+          case n ⇒
+            " (after %s)".format(initial(n - 1).getClass.getName)
+        }
+
+        throw new KernieException("Service[%s]%s is null", index, extraInfo)
       }
-      if(services.contains(service)) {
+
+      if(foundServices.contains(service)) {
         throw new KernieException("Service %s already provided", service.getClass.getSimpleName)
       }
-      serviceByClass.get(serviceClass) match {
+
+      val serviceClass = service.getClass
+
+      foundServiceByClass.get(serviceClass) match {
         case Some(otherService) if otherService ne service ⇒
           throw new KernieException("Service %s already provided by another instance", service.getClass.getSimpleName)
+
         case _ ⇒
       }
 
-      services += service
+      foundServices += service
 
-      serviceByClass += serviceClass -> service
+      foundServiceByClass += serviceClass -> service
     }
 
-    InitialServiceInfo(services, serviceByClass)
+    InitialServiceInfo(foundServices, foundServiceByClass)
   }
 
   private def _injectionFieldsOf(cls: Class[_], nest: Int): List[Field] = {
@@ -243,7 +254,7 @@ class Kernie(items: AnyRef*) {
       dependencyInfo.
         linearizedDependencies.
         map(_.getSimpleName).
-        zipWithIndex.
+        zipWithIndex.map{case (a, b) ⇒ (b, a)}.
         mkString(", "))
     )
 
