@@ -17,7 +17,10 @@
 package com.ckkloverdos.kernie
 
 import java.util.concurrent.atomic.AtomicReference
-import com.ckkloverdos.kernie.event.{ServiceEventHandler, ServiceEvent, DependencyStateChange, StateChange, SystemServiceEvent}
+import com.ckkloverdos.kernie.event.service.{ServiceEvent, DependencyStateChange, StateChange, SystemServiceEvent}
+import com.ckkloverdos.env.MutableEnv
+import com.ckkloverdos.key.TKey
+import com.ckkloverdos.kernie.event.service.ServiceEventHandler
 
 /**
  *
@@ -31,6 +34,8 @@ trait ServiceSkeleton[T <: Service] extends Service with ServiceEventHandler { s
   protected val _serviceDef = new AtomicReference[ServiceDef[T]](null)
 
   protected val _eventHandler = new AtomicReference[ServiceEventHandler](this)
+
+  protected val _dependencies = MutableEnv()
 
   protected def _setEventHandler(handler: ServiceEventHandler) {
     state match {
@@ -98,11 +103,19 @@ trait ServiceSkeleton[T <: Service] extends Service with ServiceEventHandler { s
       serviceDef
   }
 
+  def dependency[T: Manifest](key: TKey[T]) = _dependencies.getEx(key)
+
   def state = _state.get()
 
   def serviceDefID = serviceDef.id
 
+  def ping() {
+  }
+
   def onStateChanged(event: StateChange) {
+  }
+
+  def onStateChangeError(state: State, error: Throwable) {
   }
 
   def onAppServiceEvent(event: ServiceEvent) {

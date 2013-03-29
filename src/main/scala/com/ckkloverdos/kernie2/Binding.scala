@@ -14,28 +14,15 @@
  * limitations under the License.
  */
 
-package com.ckkloverdos.kernie
+package com.ckkloverdos.kernie2
 
 /**
  *
  * @author Christos KK Loverdos <loverdos@gmail.com>
  */
-trait Logger extends ServiceSkeleton[Logger] {
-  def log(fmt: String, args: Any*)
-}
-
-object LoggerDef extends ServiceDefSkeleton[Logger]()
-
-trait LoginService extends ServiceSkeleton[LoginService] {
-  type Authenticated
-  def login(username: String, password: String): Option[Authenticated]
-}
-
-object LoginServiceDef extends ServiceDefSkeleton[LoginService](Set(LoggerDef.id))
-
-object Tests {
-  val kernie = new KernieBuilder().
-    add(LoginServiceDef).
-    add(LoggerDef).
-  build
+case class Binding[T <: AnyRef](serviceAPI: Class[T], serviceClass: Class[T]) {
+  require(serviceClass ne null, "serviceClass != null")
+  require(serviceAPI ne null, "serviceAPI != null")
+  require(!serviceClass.isInterface, "!serviceClass.isInterface")
+  require(serviceAPI.isInterface, "serviceAPI.isInterface")
 }

@@ -16,6 +16,8 @@
 
 package com.ckkloverdos.kernie
 
+import com.ckkloverdos.key.TKey
+
 /**
  *
  * @author Christos KK Loverdos <loverdos@gmail.com>
@@ -24,4 +26,5 @@ trait Service {
   def state: State
   def serviceDefID: CharSequence
   def ping()
+  def dependency[T: Manifest](key: TKey[T]): T
 }

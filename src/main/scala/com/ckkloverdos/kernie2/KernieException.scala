@@ -14,15 +14,14 @@
  * limitations under the License.
  */
 
-package com.ckkloverdos.kernie.event
-
+package com.ckkloverdos.kernie2
 
 /**
  *
  * @author Christos KK Loverdos <loverdos@gmail.com>
  */
-trait ServiceEventHandler {
-  def onAppServiceEvent(event: ServiceEvent)
-  def onStateChanged(event: StateChange)
-  def onDependencyStateChanged(event: DependencyStateChange)
+final class KernieException(cause: Throwable, msg: String, args: Any*)
+    extends RuntimeException(msg.format(args: _*), cause) {
+
+  def this(msg: String, args: Any*) = this(null: Throwable, msg, args: _*)
 }

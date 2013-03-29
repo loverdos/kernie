@@ -16,13 +16,14 @@
 
 package com.ckkloverdos.kernie
 package event
+package service
 
+import com.ckkloverdos.kernie.{Service, State}
 
 /**
  *
  * @author Christos KK Loverdos <loverdos@gmail.com>
  */
-
 sealed trait ServiceEvent {
   def isSystemEvent: Boolean
 }
@@ -34,5 +35,7 @@ trait AppServiceEvent extends ServiceEvent {
   final def isSystemEvent = false
 }
 
+
 final case class StateChange(state: State) extends SystemServiceEvent
 final case class DependencyStateChange(dependency: Service, state: State) extends SystemServiceEvent
+

@@ -23,9 +23,10 @@ import scala.collection.mutable
  * @author Christos KK Loverdos <loverdos@gmail.com>
  */
 class KernieBuilder() {
-  private var serviceDefByID: Map[CharSequence, ServiceDef[_]] = Map()
-  private var idByServiceDef: Map[ServiceDef[_], CharSequence] = Map()
-  private var dependendsOf: Map[CharSequence, List[ServiceDef[_]]] = Map()
+  private var serviceDefByID = Map[CharSequence, ServiceDef[_]]()
+  private var idByServiceDef = Map[ServiceDef[_], CharSequence]()
+  private var dependendsOf = Map[CharSequence, List[ServiceDef[_]]]()
+  private var serviceByID = Map[CharSequence, AnyRef]()
 
   private def addReverseDependency(serviceDef: ServiceDef[_], dependencyID: CharSequence) {
     dependendsOf.get(dependencyID) match {
@@ -37,13 +38,45 @@ class KernieBuilder() {
     }
   }
 
-  def add[T](serviceDef: ServiceDef[T]): this.type = {
+  private[this] def _check(serviceDef: ServiceDef[_]) {
+    require(serviceDef ne null, "serviceDef ne null")
+    require(serviceDef.id ne null, "serviceDef.id ne null")
+    require(serviceDef.dependencies ne null, "serviceDef.dependencies ne null")
+    require(serviceDef.key ne null, "serviceDef.key ne null")
+  }
+
+  def add[T <: Service](serviceDef: ServiceDef[T]): this.type = {
+    _check(serviceDef)
+
+    try {
+      val instance = serviceDef.key.keyType.erasure.newInstance().asInstanceOf[T]
+
+      this._add(serviceDef, instance)
+    }
+    catch {
+      case e:Throwable ⇒
+        throw new KernieException("Could not construct an instance of %s", e)
+    }
+  }
+
+  def add[T <: Service](serviceDef: ServiceDef[T], service: T): this.type = {
+    _check(serviceDef)
+
+    _add(serviceDef, service)
+  }
+
+  private[this] def _add[T <: Service](serviceDef: ServiceDef[T], service: T): this.type = {
+    require(serviceDef.id == service.serviceDefID, "serviceDef.id == service.serviceDefID")
+    require(service.state == State.STOPPED, "service.state == State.STOPPED")
+
     val id = serviceDef.id
     serviceDefByID.get(id) match {
       case None ⇒
         idByServiceDef.get(serviceDef) match {
           case None ⇒
             serviceDefByID += id -> serviceDef
+            serviceByID    += id -> service
+
             for(dependency <- serviceDef.dependencies) {
               addReverseDependency(serviceDef, dependency)
             }
@@ -65,7 +98,7 @@ class KernieBuilder() {
     this
   }
 
-  private def sortedServiceDefs: List[ServiceDef[_]] = {
+  private[this] def sortedServiceDefs: List[ServiceDef[_]] = {
     val buffer = new mutable.ListBuffer[ServiceDef[_]]
     val marked = new mutable.HashSet[ServiceDef[_]]()
 
@@ -96,6 +129,7 @@ class KernieBuilder() {
   def build: Kernie = {
     new Kernie(
       serviceDefByID,
+      serviceByID,
       idByServiceDef,
       sortedServiceDefs,
       dependendsOf

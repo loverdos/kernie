@@ -15,30 +15,15 @@
  */
 
 package com.ckkloverdos.kernie
-
-import com.ckkloverdos.key.TKey
+package event.service
 
 /**
  *
  * @author Christos KK Loverdos <loverdos@gmail.com>
  */
-trait ServiceDef[T] {
-  /**
-   * The fully qualified name or UUID of the service defined by this instance.
-   */
-  def id: CharSequence
-
-  def key: TKey[T]
-
-  /**
-   * The `IDs` of the services this one depends on.
-   * @return
-   */
-  def dependencies: Set[CharSequence]
-
-  /**
-   * The 'IDs' of dependencies critical to the operation of the service defined by this instance.
-   *
-   */
-//  def criticalDependencies: Set[CharSequence]
+trait ServiceEventHandler {
+  def onAppServiceEvent(event: ServiceEvent)
+  def onStateChanged(event: StateChange)
+  def onStateChangeError(state: State, error: Throwable)
+  def onDependencyStateChanged(event: DependencyStateChange)
 }
