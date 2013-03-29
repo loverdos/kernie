@@ -62,7 +62,7 @@ class Kernie(items: AnyRef*) {
           case n if n == initial.size - 1 ⇒
             " (the last one)"
           case n ⇒
-            " (after %s)".format(initial(n - 1).getClass.getName)
+            " (after %s)".format(initial(n - 1).getClass.getSimpleName)
         }
 
         throw new KernieException("Service[%s]%s is null", index, extraInfo)
@@ -229,25 +229,86 @@ class Kernie(items: AnyRef*) {
 //    }
 //  }
 
+  private def _getOrCreateInstance(
+      cls: Class[_],
+      instances: mutable.LinkedHashSet[AnyRef],
+      instanceByClass: mutable.LinkedHashMap[Class[_], AnyRef],
+      format: String,
+      args: Any*
+  ): AnyRef = {
+    instanceByClass.get(cls) match {
+      case Some(instance) ⇒
+        instance
+
+      case None ⇒
+        val instance = Catch(cls.newInstance().asInstanceOf[AnyRef])(format, args:_*)
+        instances += instance
+        instanceByClass += cls -> instance
+        instance
+    }
+  }
+
+  private def _injectDependencies(
+    initialServiceInfo: InitialServiceInfo,
+    dependencyInfo: DependencyInfo
+  ) {
+    val instances = initialServiceInfo.instances
+    val instanceByClass = initialServiceInfo.instanceByClass
+    val serviceClasses = dependencyInfo.serviceClasses
+    val immediateClassDependencies = dependencyInfo.immediateClassDependencies
+    val linearizedDependencies = dependencyInfo.linearizedDependencies
+
+    for {
+      cls ← linearizedDependencies
+      clsDeps ← immediateClassDependencies.get(cls)
+      field ← clsDeps.fieldsToInject
+      fieldType = field.getType
+    } {
+      logger.debug("Injecting [%s:] %s into %s".format(field.getName, fieldType.getSimpleName, cls.getSimpleName))
+
+      val clsInstance = _getOrCreateInstance(
+        cls,
+        instances,
+        instanceByClass,
+        "Could not create instance of owner service %s",
+        cls.getSimpleName
+      )
+
+      val fieldValue = _getOrCreateInstance(
+        fieldType,
+        instances,
+        instanceByClass,
+        "Could not create instance of injected service %s",
+        fieldType.getSimpleName
+      )
+
+      Catch {
+        field.set(clsInstance, fieldValue)
+      }("Could not set field [%s:] %s of %s", field.getName, fieldType.getSimpleName, cls.getSimpleName)
+    }
+  }
+
   private def _init(services: Seq[AnyRef]) {
     def logServices(format: String, serviceClasses: collection.Set[Class[_]]) {
       logger.debug(format.format(serviceClasses.map(_.getSimpleName).mkString(", ")))
     }
 
+    //////////////////////
     val initialServiceInfo = _initialServiceInfoOf(services)
-    _services ++= initialServiceInfo.services
-    _serviceByClass ++= initialServiceInfo.serviceByClass
+    _services ++= initialServiceInfo.instances
+    _serviceByClass ++= initialServiceInfo.instanceByClass
 
-    val initialServiceClasses = initialServiceInfo.serviceByClass.keySet
+    val initialServiceClasses = new mutable.LinkedHashSet[Class[_]] ++ initialServiceInfo.instanceByClass.keys
     if(logger.isDebugEnabled()) {
-      logServices("Initial services: %s", initialServiceClasses)
+      logServices("Initial: %s", initialServiceClasses)
     }
 
-    val serviceClasses = mutable.LinkedHashSet[Class[_]](services.map(_.getClass):_*)
-    val dependencyInfo = _computeDependencyInfo(serviceClasses)
+    //////////////////////
+    val dependencyInfo = _computeDependencyInfo(initialServiceClasses)
 
-    if(logger.isDebugEnabled) {
-      logServices("New services: %s", dependencyInfo.serviceClasses -- initialServiceClasses)
+    if(logger.isDebugEnabled && dependencyInfo.serviceClasses.size != initialServiceClasses.size) {
+      val newServiceClasses = dependencyInfo.serviceClasses -- initialServiceClasses
+      logServices("New: %s", newServiceClasses)
     }
 
     logger.debug("Linearized dependencies: %s".format(
@@ -258,9 +319,7 @@ class Kernie(items: AnyRef*) {
         mkString(", "))
     )
 
-    //    _linearizeDependencies()
-
-//    _injectDependencies()
+    _injectDependencies(initialServiceInfo, dependencyInfo)
   }
 
 }

@@ -33,8 +33,8 @@ package object kernie {
   )
 
   final case class InitialServiceInfo(
-      services: mutable.LinkedHashSet[AnyRef],
-      serviceByClass: mutable.LinkedHashMap[Class[_], AnyRef]
+      instances: mutable.LinkedHashSet[AnyRef],
+      instanceByClass: mutable.LinkedHashMap[Class[_], AnyRef]
   )
 
   final case class DependencyInfo(
