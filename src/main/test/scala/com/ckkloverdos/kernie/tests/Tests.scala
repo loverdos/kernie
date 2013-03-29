@@ -14,58 +14,40 @@
  * limitations under the License.
  */
 
-package com.ckkloverdos.kernie
-package tests
+package com.ckkloverdos.kernie.tests
 
-import com.ckkloverdos.kernie.ServiceSkeleton
+import com.ckkloverdos.kernie.Kernie
+import com.ckkloverdos.resource.FileStreamResourceContext
+import javax.inject.Inject
 
-/**
- *
- * @author Christos KK Loverdos <loverdos@gmail.com>
- */
-trait Logger extends ServiceSkeleton[Logger] {
-  def log(fmt: String, args: Any*)
+class BasicResources {
+  val SlashEtcResourceContext = new FileStreamResourceContext("/etc/any")
+
+  def getResource(path: String) = SlashEtcResourceContext.getResource(path)
+  def getResourceEx(path: String) = SlashEtcResourceContext.getResourceEx(path)
 }
 
-object Logger extends ServiceDefSkeleton[Logger]()
-
-trait LoginService extends ServiceSkeleton[LoginService] {
-  type Authenticated
-  def login(username: String, password: String): Option[Authenticated]
+class AkkaService {
+  @Inject var resources: BasicResources = _
 }
 
-object LoginService extends ServiceDefSkeleton[LoginService](Set(Logger.id))
-
-///////////////////
-trait MasterProps extends ServiceSkeleton[MasterProps]
-object MasterProps extends ServiceDefSkeleton[MasterProps]
-
-trait Aquarium extends ServiceSkeleton[Aquarium]
-object Aquarium extends ServiceDefSkeleton[Aquarium](Set(MasterProps.id))
-
-trait AkkaService extends ServiceSkeleton[AkkaService]
-object AkkaService extends ServiceDefSkeleton[AkkaService](Set(Aquarium.id))
-
-trait ChargingService extends ServiceSkeleton[ChargingService]
-object ChargingService extends ServiceDefSkeleton[ChargingService](Set(Aquarium.id))
-
-trait RESTService extends ServiceSkeleton[RESTService]
-object RESTService extends ServiceDefSkeleton[RESTService](Set(MasterProps.id))
-
-trait StoreProvider extends ServiceSkeleton[StoreProvider] {
-  type Store
-  def provideStore: Store
+class UserStore {
+  @Inject var resources: BasicResources = _
 }
-object StoreProvider extends ServiceDefSkeleton[StoreProvider](Set(MasterProps.id))
+class RCStore
+class StoreWatcher {
+  @Inject var userStore: UserStore = _
+  @Inject var rcStore: RCStore = _
+}
 
 object Tests {
-  val kernie = new KernieBuilder().
-    add(LoginService).
-    add(Logger).
-    add(AkkaService).
-    add(MasterProps).
-    add(Aquarium).
-    add(ChargingService).
-    add(RESTService).
-  build
+  def main(args: Array[String]) {
+    val kernie = new Kernie(
+      new BasicResources,
+      new StoreWatcher,
+      new RCStore,
+      new UserStore,
+      new AkkaService
+    )
+  }
 }

@@ -4,7 +4,7 @@ package com.ckkloverdos
  *
  * @author Christos KK Loverdos <loverdos@gmail.com>
  */
-package object kernie2 {
+package object kernie {
   final def Catch[A](f: ⇒ A)(format: String, args: Any*): A = {
     try f
     catch {
@@ -16,7 +16,7 @@ package object kernie2 {
     }
   }
 
-  private[kernie2]
+  private[kernie]
   final class LinkedSet[T] private(elems: Vector[T], set: Set[T]) {
     def this(t: T) = this(Vector(t), Set(t))
 

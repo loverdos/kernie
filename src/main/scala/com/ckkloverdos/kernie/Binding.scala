@@ -14,14 +14,15 @@
  * limitations under the License.
  */
 
-package com.ckkloverdos.kernie2
+package com.ckkloverdos.kernie
 
 /**
  *
  * @author Christos KK Loverdos <loverdos@gmail.com>
  */
-final class KernieException(cause: Throwable, format: String, args: Any*)
-    extends RuntimeException(format.format(args: _*), cause) {
-
-  def this(format: String, args: Any*) = this(null: Throwable, format, args: _*)
+case class Binding[T <: AnyRef](serviceAPI: Class[T], serviceClass: Class[T]) {
+  require(serviceClass ne null, "serviceClass != null")
+  require(serviceAPI ne null, "serviceAPI != null")
+  require(!serviceClass.isInterface, "!serviceClass.isInterface")
+  require(serviceAPI.isInterface, "serviceAPI.isInterface")
 }
