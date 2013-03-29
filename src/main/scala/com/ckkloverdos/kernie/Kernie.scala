@@ -28,23 +28,20 @@ import scala.collection.mutable
  * @author Christos KK Loverdos <loverdos@gmail.com>
  */
 class Kernie(items: AnyRef*) {
-  import Kernie._
-
-  private var _providers = Set[Provider]()
-  private var _servicesByProvider = Map[Provider, Set[Service]]()
   // The service instance for a specific service class/type
-  private var _serviceByClass = Map[Class, Service]()
+  private val _serviceByClass = mutable.LinkedHashMap[Class[_], AnyRef]()
+
   // The set of singleton services
-  private var _services = Set[Service]()
+  private val _services = mutable.LinkedHashSet[AnyRef]()
   // The service provider of each service (by the service class)
-  private var _providerByClass = Map[Class, Provider]()
+  private var _providerByClass = Map[Class[_], AnyRef]()
   // The dependencies of each service
-  private var _serviceClassDependencies = Map[Class, Set[Class]]()
-  private var _linearizedClassDependencies = List[Class]()
+  private var _serviceClassDependencies = Map[Class[_], Set[Class[_]]]()
+  private var _linearizedClassDependencies = List[Class[_]]()
   // The fields each singleton service needs to be injected
-  private var _fieldsToInjectByInstance = Map[Service, List[Field]]()
+  private var _fieldsToInjectByInstance = Map[AnyRef, List[Field]]()
   // The reflective fields (along with their respective instances) that are of the same type
-  private var _fieldsOfTheSameType = Map[Class, List[(Field, Service)]]()
+  private var _fieldsOfTheSameType = Map[Class[_], List[(Field, AnyRef)]]()
 
   private val logger = LoggerFactory.getLogger(this.getClass)
 
@@ -54,31 +51,34 @@ class Kernie(items: AnyRef*) {
     field.getAnnotation(classOf[Inject]) ne null
 
   // Updates _services && _serviceByClass
-  private def _registerInitialServices(services: Seq[AnyRef]) {
+  private def _initialServiceInfoOf(services: Seq[AnyRef]): InitialServiceInfo = {
+    val services = new mutable.LinkedHashSet[AnyRef]
+    val serviceByClass = new mutable.LinkedHashMap[Class[_], AnyRef]
+
     for(service ← services) {
       val serviceClass = service.getClass
 
       if(service eq null) {
         throw new KernieException("Service is null")
       }
-      if(_services.contains(service)) {
+      if(services.contains(service)) {
         throw new KernieException("Service %s already provided", service.getClass.getSimpleName)
       }
-      _serviceByClass.get(serviceClass) match {
+      serviceByClass.get(serviceClass) match {
         case Some(otherService) if otherService ne service ⇒
           throw new KernieException("Service %s already provided by another instance", service.getClass.getSimpleName)
         case _ ⇒
       }
 
-      logger.debug("Registering initial service class %s".format(service.getClass.getSimpleName))
+      services += service
 
-      _services += service
-
-      _serviceByClass += serviceClass -> service
+      serviceByClass += serviceClass -> service
     }
+
+    InitialServiceInfo(services, serviceByClass)
   }
 
-  private def _injectionFieldsOf(cls: Class, nest: Int): List[Field] = {
+  private def _injectionFieldsOf(cls: Class[_], nest: Int): List[Field] = {
     Catch {
       cls.
         getDeclaredFields.
@@ -99,21 +99,27 @@ class Kernie(items: AnyRef*) {
   }
 
   // Currently only injected fields contribute to dependencies
-  private def _immediateDependenciesOf(cls: Class, nest: Int): List[Class] = {
+  private def _immediateDependenciesOf(cls: Class[_], nest: Int): ImmediateDependencies = {
     val fieldsToInject = _injectionFieldsOf(cls, nest)
-    val classesToInject = fieldsToInject.map(_.getType)
-    classesToInject
+    val classesToInject = fieldsToInject.map(_.getType)/*: List[Class[_]]*/
+
+    ImmediateDependencies(
+      fieldsToInject,
+      classesToInject
+    )
   }
 
   // The initialSet of known classes bootstraps the dependency graph
-  private def _computeDependencyGraph(initialSet: Set[Class]): List[Class] = {
-    val linearizedDeps = mutable.ListBuffer[Class]()
-    val explored = mutable.LinkedHashSet[Class]()
+  private def _computeDependencyInfo(serviceClasses: scala.collection.Set[Class[_]]): DependencyInfo = {
+    val linearizedDeps = mutable.LinkedHashSet[Class[_]]()
+    val explored = mutable.LinkedHashSet[Class[_]]()
+    val allServiceClasses = new mutable.LinkedHashSet[Class[_]] ++ serviceClasses
+    val allImmediateClassDependencies = new mutable.LinkedHashMap[Class[_], ImmediateDependencies]
 
     def explore(
-        cls: Class,
-        path: LinkedSet[Class],
-        allDeps: mutable.ListBuffer[Class],
+        cls: Class[_],
+        path: LinkedSet[Class[_]],
+        deps: mutable.LinkedHashSet[Class[_]],
         nest: Int
     ) {
       if(explored.contains(cls)) {
@@ -128,40 +134,40 @@ class Kernie(items: AnyRef*) {
       )
 
       val immediateDeps = _immediateDependenciesOf(cls, nest + 1)
-      for(immediateDep ← immediateDeps) {
-        if(path.contains(immediateDep)) {
+      allImmediateClassDependencies += cls -> immediateDeps
+
+      for(immediateClassDep ← immediateDeps.classesToInject) {
+        if(path.contains(immediateClassDep)) {
           throw new KernieException(
             "Circular dependency in path %s",
-            (path + immediateDep).map(_.getSimpleName).mkString(" -> ")
+            (path + immediateClassDep).map(_.getSimpleName).mkString(" -> ")
           )
         }
 
         explore(
-          immediateDep,
-          path + immediateDep,
-          allDeps,
+          immediateClassDep,
+          path + immediateClassDep,
+          deps,
           nest + 1
         )
       }
 
-      allDeps += cls
+      deps += cls
       explored += cls
+      allServiceClasses += cls
     }
 
     for {
-      cls ← initialSet
+      cls ← serviceClasses
     } {
       explore(cls, new LinkedSet(cls), linearizedDeps, 0)
     }
 
-    val list = linearizedDeps.toList
-    logger.debug("Linearized dependencies: %s".format(
-      list.
-        map(_.getSimpleName).
-        zipWithIndex.
-        mkString(", "))
+    DependencyInfo(
+      allServiceClasses,
+      allImmediateClassDependencies,
+      linearizedDeps
     )
-    list
   }
 
 //  private def _getOrInstantiateInjection(cls: Class): AnyRef = {
@@ -213,20 +219,37 @@ class Kernie(items: AnyRef*) {
 //  }
 
   private def _init(services: Seq[AnyRef]) {
-    _registerInitialServices(services)
+    def logServices(format: String, serviceClasses: collection.Set[Class[_]]) {
+      logger.debug(format.format(serviceClasses.map(_.getSimpleName).mkString(", ")))
+    }
 
-    val serviceClasses = services.map(_.getClass).toSet[Class]
-    _computeDependencyGraph(serviceClasses)
+    val initialServiceInfo = _initialServiceInfoOf(services)
+    _services ++= initialServiceInfo.services
+    _serviceByClass ++= initialServiceInfo.serviceByClass
 
-//    _linearizeDependencies()
+    val initialServiceClasses = initialServiceInfo.serviceByClass.keySet
+    if(logger.isDebugEnabled()) {
+      logServices("Initial services: %s", initialServiceClasses)
+    }
+
+    val serviceClasses = mutable.LinkedHashSet[Class[_]](services.map(_.getClass):_*)
+    val dependencyInfo = _computeDependencyInfo(serviceClasses)
+
+    if(logger.isDebugEnabled) {
+      logServices("New services: %s", dependencyInfo.serviceClasses -- initialServiceClasses)
+    }
+
+    logger.debug("Linearized dependencies: %s".format(
+      dependencyInfo.
+        linearizedDependencies.
+        map(_.getSimpleName).
+        zipWithIndex.
+        mkString(", "))
+    )
+
+    //    _linearizeDependencies()
 
 //    _injectDependencies()
   }
 
-}
-
-object Kernie {
-  private[kernie] type Class = Predef.Class[_]
-  private[kernie] type Service = AnyRef
-  private[kernie] type Provider = AnyRef
 }

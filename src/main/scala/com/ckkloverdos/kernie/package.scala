@@ -1,5 +1,8 @@
 package com.ckkloverdos
 
+import scala.collection.mutable
+import java.lang.reflect.Field
+
 /**
  *
  * @author Christos KK Loverdos <loverdos@gmail.com>
@@ -16,7 +19,6 @@ package object kernie {
     }
   }
 
-  private[kernie]
   final class LinkedSet[T] private(elems: Vector[T], set: Set[T]) {
     def this(t: T) = this(Vector(t), Set(t))
 
@@ -24,4 +26,20 @@ package object kernie {
     def contains(t: T) = set.contains(t)
     def map[U](f: T ⇒ U) = elems.map(f)
   }
+
+  final case class ImmediateDependencies(
+    fieldsToInject: List[Field],
+    classesToInject: List[Class[_]]
+  )
+
+  final case class InitialServiceInfo(
+      services: mutable.LinkedHashSet[AnyRef],
+      serviceByClass: mutable.LinkedHashMap[Class[_], AnyRef]
+  )
+
+  final case class DependencyInfo(
+      serviceClasses: mutable.LinkedHashSet[Class[_]],
+      immediateClassDependencies: mutable.LinkedHashMap[Class[_], ImmediateDependencies],
+      linearizedDependencies: mutable.LinkedHashSet[Class[_]]
+  )
 }

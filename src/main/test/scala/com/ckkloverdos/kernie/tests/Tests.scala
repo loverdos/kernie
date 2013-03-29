@@ -45,8 +45,6 @@ object Tests {
     val kernie = new Kernie(
       new BasicResources,
       new StoreWatcher,
-      new RCStore,
-      new UserStore,
       new AkkaService
     )
   }
