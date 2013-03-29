@@ -28,14 +28,26 @@ class BasicResources {
 }
 
 class AkkaService {
-  @Inject private var resources: BasicResources = _
+  @Inject var resources: BasicResources = _
+}
+
+class UserStore {
+  @Inject var resources: BasicResources = _
+}
+class RCStore
+class StoreWatcher {
+  @Inject var userStore: UserStore = _
+  @Inject var rcStore: RCStore = _
 }
 
 object Tests {
   def main(args: Array[String]) {
     val kernie = new Kernie(
-      new AkkaService,
-      new BasicResources
+      new BasicResources,
+      new StoreWatcher,
+      new RCStore,
+      new UserStore,
+      new AkkaService
     )
   }
 }

@@ -20,8 +20,8 @@ package com.ckkloverdos.kernie2
  *
  * @author Christos KK Loverdos <loverdos@gmail.com>
  */
-final class KernieException(cause: Throwable, msg: String, args: Any*)
-    extends RuntimeException(msg.format(args: _*), cause) {
+final class KernieException(cause: Throwable, format: String, args: Any*)
+    extends RuntimeException(format.format(args: _*), cause) {
 
-  def this(msg: String, args: Any*) = this(null: Throwable, msg, args: _*)
+  def this(format: String, args: Any*) = this(null: Throwable, format, args: _*)
 }
