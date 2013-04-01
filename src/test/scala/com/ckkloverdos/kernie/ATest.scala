@@ -14,12 +14,13 @@
  * limitations under the License.
  */
 
-package com.ckkloverdos.kernie.tests
+package com.ckkloverdos.kernie
 
-import com.ckkloverdos.kernie.{Binding, Kernie}
+import com.ckkloverdos.maybe.Maybe
 import com.ckkloverdos.resource.{StreamResource, FileStreamResourceContext}
 import javax.inject.Inject
-import com.ckkloverdos.maybe.Maybe
+import org.junit.Test
+import junit.framework.TestCase
 
 trait Resources {
   def getResource(path: String): Maybe[StreamResource]
@@ -33,8 +34,13 @@ class BasicResources extends Resources {
   def getResourceEx(path: String) = SlashEtcResourceContext.getResourceEx(path)
 }
 
+class SuperResources extends Resources {
+  def getResource(path: String) = throw new UnsupportedOperationException
+  def getResourceEx(path: String) = throw new UnsupportedOperationException
+}
+
 class RollerService {
-  @Inject var resources: BasicResources = _
+  @Inject var resources: Resources = _
 }
 
 class UserStore {
@@ -54,12 +60,19 @@ class StoreWatcher {
   @Inject var rcStore: RCStore = _
 }
 
-object Tests {
-  def main(args: Array[String]) {
-    val kernie = new Kernie(
-      Binding(classOf[Resources], classOf[BasicResources]),
-      new StoreWatcher,
-      new RollerService
+class ATest {
+  @Test
+  def testA() {
+    val rollerService = new RollerService
+    val storeWatcher = new StoreWatcher
+    val resourcesBinding = Binding(classOf[Resources], classOf[BasicResources])
+    
+    new Kernie(
+      resourcesBinding,
+      storeWatcher,
+      rollerService
     )
+
+    require(rollerService.resources.isInstanceOf[BasicResources]) // via `resourcesBinding`
   }
 }

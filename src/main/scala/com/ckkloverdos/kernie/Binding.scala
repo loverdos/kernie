@@ -17,19 +17,38 @@
 package com.ckkloverdos.kernie
 
 /**
+ * Binds together an interface and implementation.
  *
  * @author Christos KK Loverdos <loverdos@gmail.com>
  */
-final class Binding[T](val api: Class[T], val impl: Class[_ <: T])
+final class Binding[T] private(val api: Class[T], val impl: Class[_ <: T]) {
+
+  override def hashCode() = api.## * 31 + impl.##
+
+  override def equals(obj: Any) = obj match {
+    case that: Binding[_] ⇒ this.api == that.api && this.impl == that.impl
+    case _ ⇒ false
+  }
+
+  override def toString = "%s(%s, %s)".format(getClass.getSimpleName, api.getSimpleName, impl.getSimpleName)
+
+  @inline final def untypedAPI: Class[_] = api
+
+  @inline final def untypedImpl: Class[_] = impl
+
+  @inline final def toTuple: (Class[T], Class[_ <: T]) = (api, impl)
+
+  @inline final def toUntypedTuple: (Class[_], Class[_]) = (api, impl)
+}
 
 object Binding {
   def apply[T](api: Class[T], impl: Class[_ <: T]): Binding[T] = {
-    checkBinding(api, impl)
+    CheckBinding(api, impl)
     new Binding[T](api, impl)
   }
 
   def dynamic[A, B](api: Class[A], impl: Class[B]): Binding[_] = {
-    checkBinding(api, impl) // I need exceptions early
+    CheckBinding(api, impl) // I need exceptions early
     new Binding(api, impl.asSubclass(api))
   }
 }

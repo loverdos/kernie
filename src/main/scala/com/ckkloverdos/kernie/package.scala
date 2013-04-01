@@ -24,8 +24,7 @@ package object kernie {
     if(!condition) throw new KernieException(format.format(args:_*))
   }
 
-  @inline
-  final def checkBinding(api: Class[_], impl: Class[_]) {
+  final def CheckBinding(api: Class[_], impl: Class[_]) {
     Check(
       impl ne null,
       "Implementation for %s is null", api.getName
@@ -51,28 +50,4 @@ package object kernie {
       "Implementation %s is incompatible with %s", impl.getName, api.getName
     )
   }
-
-  final class LinkedSet[T] private(elems: Vector[T], set: Set[T]) {
-    def this(t: T) = this(Vector(t), Set(t))
-
-    def +(t: T) = new LinkedSet(elems :+ t, set + t)
-    def contains(t: T) = set.contains(t)
-    def map[U](f: T ⇒ U) = elems.map(f)
-  }
-
-  final case class ImmediateDependencies(
-    fieldsToInject: List[Field],
-    classesToInject: List[Class[_]]
-  )
-
-  final case class InitialServiceInfo(
-      instances: mutable.LinkedHashSet[AnyRef],
-      instanceByClass: mutable.LinkedHashMap[Class[_], AnyRef]
-  )
-
-  final case class DependencyInfo(
-      serviceClasses: mutable.LinkedHashSet[Class[_]],
-      immediateClassDependencies: mutable.LinkedHashMap[Class[_], ImmediateDependencies],
-      linearizedDependencies: mutable.LinkedHashSet[Class[_]]
-  )
 }

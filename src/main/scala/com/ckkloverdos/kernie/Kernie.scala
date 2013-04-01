@@ -20,6 +20,7 @@ import java.lang.reflect.Field
 import javax.inject.Inject
 import org.slf4j.LoggerFactory
 import scala.collection.mutable
+import internal._
 
 
 /**
@@ -181,75 +182,61 @@ class Kernie(items: AnyRef*) {
     )
   }
 
-//  private def _getOrInstantiateInjection(cls: Class): AnyRef = {
-//    _serviceByClass.get(cls) match {
-//      case Some(service) ⇒
-//        service
-//
-//      case None ⇒
-//        val service = cls.newInstance().asInstanceOf[AnyRef]
-//        _addService(service)
-//        service
-//    }
-//  }
-
-//  private def _injectDependencies() {
-//    val instance_fields = for {
-//      serviceClass ← _linearizedClassDependencies
-//      service ← _serviceByClass.get(serviceClass)
-//      fields ← _fieldsToInjectByInstance.get(service)
-//    } yield (service, fields)
-//
-//    for {
-//      (instance, fields) ← instance_fields
-//      field ← fields
-//    } {
-//      val fieldClass = field.getType
-//      _serviceByClass.get(fieldClass) match {
-////        case None ⇒
-////          // Service has not been resolved yet
-//
-//        case Some(fieldValue) ⇒
-//          try {
-//            logger.debug("Injecting %s into %s: %s of %s".format(
-//              fieldValue, field.getSimpleName, field.getType.getSimpleName, instance
-//            ))
-//            field.set(instance, fieldValue)
-//          }
-//          catch {
-//            case e: Throwable ⇒
-//              throw new KernieException(
-//                "Could not inject %s: %s into %s",
-//                field.getSimpleName,
-//                field.getType.getSimpleName,
-//                instance
-//            )
-//          }
-//      }
-//    }
-//  }
-
-  private def _getOrCreateInstance(
+  private def _newInstanceOf(
       cls: Class[_],
       instances: mutable.LinkedHashSet[AnyRef],
       instanceByClass: mutable.LinkedHashMap[Class[_], AnyRef],
+      nest: Int,
+      debugContext: String,
       format: String,
       args: Any*
   ): AnyRef = {
+    val nesting = "  " * nest
+    logger.debug("%s%s Instantiating %s".format(nesting, debugContext, cls.getSimpleName))
+    val instance = Catch(cls.newInstance().asInstanceOf[AnyRef])(format, args: _*)
+    instances += instance
+    instanceByClass += cls -> instance
+    instance
+  }
+
+  private def _computeServiceInstance(
+      cls: Class[_],
+      instances: mutable.LinkedHashSet[AnyRef],
+      instanceByClass: mutable.LinkedHashMap[Class[_], AnyRef],
+      implByAPI: collection.Map[Class[_], Class[_]],
+      nest: Int,
+      debugContext: String,
+      format: String,
+      args: Any*
+  ): AnyRef = {
+    val nesting = "  " * nest
+    logger.debug("%sComputing service instance for %s".format(nesting, cls.getSimpleName))
     instanceByClass.get(cls) match {
       case Some(instance) ⇒
+        // Service has already been computed
         instance
 
       case None ⇒
-        val instance = Catch(cls.newInstance().asInstanceOf[AnyRef])(format, args:_*)
-        instances += instance
-        instanceByClass += cls -> instance
-        instance
+        implByAPI.get(cls) match {
+          case Some(impl) ⇒
+            // We need an interface, so get the binding
+            logger.debug("%s%s Computing %s for %s".format(nesting, debugContext, impl.getSimpleName, cls.getSimpleName))
+            _newInstanceOf(impl, instances, instanceByClass, nest + 1, debugContext, format, args:_*)
+
+          case None ⇒
+            if(cls.isInterface) {
+              throw new KernieException(format + " " + debugContext, args:_*)
+            }
+            else {
+              _newInstanceOf(cls, instances, instanceByClass, nest + 1, debugContext, format, args:_*)
+            }
+        }
     }
   }
 
   private def _injectDependencies(
     initialServiceInfo: InitialServiceInfo,
+    bindingInfo: BindingInfo,
     dependencyInfo: DependencyInfo
   ) {
     val instances = initialServiceInfo.instances
@@ -257,6 +244,7 @@ class Kernie(items: AnyRef*) {
     val serviceClasses = dependencyInfo.serviceClasses
     val immediateClassDependencies = dependencyInfo.immediateClassDependencies
     val linearizedDependencies = dependencyInfo.linearizedDependencies
+    val implByAPI = bindingInfo.implByAPI
 
     for {
       cls ← linearizedDependencies
@@ -266,18 +254,24 @@ class Kernie(items: AnyRef*) {
     } {
       logger.debug("Injecting [%s:] %s into %s".format(field.getName, fieldType.getSimpleName, cls.getSimpleName))
 
-      val clsInstance = _getOrCreateInstance(
+      val clsInstance = _computeServiceInstance(
         cls,
         instances,
         instanceByClass,
+        implByAPI,
+        1,
+        "[owner service %s]".format(cls.getSimpleName),
         "Could not create instance of owner service %s",
         cls.getSimpleName
       )
 
-      val fieldValue = _getOrCreateInstance(
+      val fieldValue = _computeServiceInstance(
         fieldType,
         instances,
         instanceByClass,
+        implByAPI,
+        1,
+        "[owner service %s]".format(cls.getSimpleName),
         "Could not create instance of injected service %s",
         fieldType.getSimpleName
       )
@@ -288,20 +282,55 @@ class Kernie(items: AnyRef*) {
     }
   }
 
-  private def _init(services: Seq[AnyRef]) {
-    def logServices(format: String, serviceClasses: collection.Set[Class[_]]) {
-      logger.debug(format.format(serviceClasses.map(_.getSimpleName).mkString(", ")))
+  private def _checkBindings(bindings: Seq[Binding[_]]) {
+    val apiGroups = bindings.groupBy(_.api)
+    val duplicateAPIs = apiGroups.filter(_._2.size > 1)
+    for((api, classes) ← duplicateAPIs) {
+      throw new KernieException(
+        "%s is bound to multiple implementations: %s",
+        api.getSimpleName,
+        classes.map(_.impl.getSimpleName).mkString(", "))
+    }
+  }
+
+  private def _computeBindingInfo(bindings: Seq[Binding[_]]): BindingInfo = {
+    _checkBindings(bindings)
+
+    val apiAndImpls = bindings.map(_.toUntypedTuple)
+    val apis = bindings.map(_.untypedAPI)
+    val impls = bindings.map(_.untypedImpl)
+
+    val implByAPI = mutable.LinkedHashMap[Class[_], Class[_]](apiAndImpls:_*)
+    val apiClasses = mutable.LinkedHashSet[Class[_]](apis:_*)
+    val implClasses = mutable.LinkedHashSet[Class[_]](impls:_*)
+
+    BindingInfo(implByAPI, apiClasses, implClasses)
+  }
+
+  private def _logClasses(format: String, serviceClasses: collection.Set[Class[_]]) {
+    logger.debug(format.format(serviceClasses.map(_.getSimpleName).mkString(", ")))
+  }
+
+  private def _init(descriptions: Seq[AnyRef]) {
+    if(logger.isDebugEnabled) {
+      logger.debug("%s Descriptions: %s".format(descriptions.size, descriptions.mkString(", ")))
     }
 
+    val (bindings0, services) = descriptions.partition(_.isInstanceOf[Binding[_]])
+    val bindings = bindings0.map(_.asInstanceOf[Binding[_]])
+    val bindingInfo = _computeBindingInfo(bindings)
+
     val initialServiceInfo = _initialServiceInfoOf(services)
-    val initialServiceClasses = new mutable.LinkedHashSet[Class[_]] ++ initialServiceInfo.instanceByClass.keys
+    val initialServiceClasses = new mutable.LinkedHashSet[Class[_]] ++
+      bindingInfo.implClasses ++
+      initialServiceInfo.instanceByClass.keys
     val dependencyInfo = _computeDependencyInfo(initialServiceClasses)
 
     if(logger.isDebugEnabled()) {
-      logServices("Initial: %s", initialServiceClasses)
+      _logClasses("Initial: %s", initialServiceClasses)
 
       val newServiceClasses = dependencyInfo.serviceClasses -- initialServiceClasses
-      logServices("New: %s", newServiceClasses)
+      _logClasses("New: %s", newServiceClasses)
 
       logger.debug("Linearized dependencies: %s".format(
         dependencyInfo.
@@ -312,6 +341,6 @@ class Kernie(items: AnyRef*) {
       )
     }
 
-    _injectDependencies(initialServiceInfo, dependencyInfo)
+    _injectDependencies(initialServiceInfo, bindingInfo, dependencyInfo)
   }
 }
