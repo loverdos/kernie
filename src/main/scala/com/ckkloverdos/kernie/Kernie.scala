@@ -135,15 +135,19 @@ class Kernie(items: AnyRef*) {
         nest: Int
     ) {
       if(explored.contains(cls)) {
-        logger.debug("%sAlready explored %s".format("  " * nest, cls.getSimpleName))
+        if(logger.isDebugEnabled) {
+          logger.debug("%sAlready explored %s".format("  " * nest, cls.getSimpleName))
+        }
         return
       }
 
-      logger.debug("%sExploring %s, path is %s".format(
-        "  " * nest,
-        cls.getSimpleName,
-        path.map(_.getSimpleName).mkString(" -> "))
-      )
+      if(logger.isDebugEnabled) {
+        logger.debug("%sExploring %s, path is %s".format(
+          "  " * nest,
+          cls.getSimpleName,
+          path.map(_.getSimpleName).mkString(" -> "))
+        )
+      }
 
       val immediateDeps = _immediateDependenciesOf(cls, nest + 1)
       allImmediateClassDependencies += cls -> immediateDeps
@@ -191,8 +195,11 @@ class Kernie(items: AnyRef*) {
       format: String,
       args: Any*
   ): AnyRef = {
-    val nesting = "  " * nest
-    logger.debug("%s%s Instantiating %s".format(nesting, debugContext, cls.getSimpleName))
+    if(logger.isDebugEnabled) {
+      val nesting = "  " * nest
+      logger.debug("%s%s Instantiating %s".format(nesting, debugContext, cls.getSimpleName))
+    }
+
     val instance = Catch(cls.newInstance().asInstanceOf[AnyRef])(format, args: _*)
     instances += instance
     instanceByClass += cls -> instance
@@ -210,7 +217,10 @@ class Kernie(items: AnyRef*) {
       args: Any*
   ): AnyRef = {
     val nesting = "  " * nest
-    logger.debug("%sComputing service instance for %s".format(nesting, cls.getSimpleName))
+    if(logger.isDebugEnabled) {
+      logger.debug("%sComputing service instance for %s".format(nesting, cls.getSimpleName))
+    }
+
     instanceByClass.get(cls) match {
       case Some(instance) ⇒
         // Service has already been computed
@@ -220,7 +230,10 @@ class Kernie(items: AnyRef*) {
         implByAPI.get(cls) match {
           case Some(impl) ⇒
             // We need an interface, so get the binding
-            logger.debug("%s%s Computing %s for %s".format(nesting, debugContext, impl.getSimpleName, cls.getSimpleName))
+            if(logger.isDebugEnabled) {
+              logger.debug("%s%s Computing %s for %s".format(nesting, debugContext, impl.getSimpleName, cls.getSimpleName))
+            }
+
             _newInstanceOf(impl, instances, instanceByClass, nest + 1, debugContext, format, args:_*)
 
           case None ⇒
@@ -252,7 +265,9 @@ class Kernie(items: AnyRef*) {
       field ← clsDeps.fieldsToInject
       fieldType = field.getType
     } {
-      logger.debug("Injecting [%s:] %s into %s".format(field.getName, fieldType.getSimpleName, cls.getSimpleName))
+      if(logger.isDebugEnabled) {
+        logger.debug("Injecting [%s:] %s into %s".format(field.getName, fieldType.getSimpleName, cls.getSimpleName))
+      }
 
       val clsInstance = _computeServiceInstance(
         cls,

@@ -66,7 +66,7 @@ class ATest {
     val rollerService = new RollerService
     val storeWatcher = new StoreWatcher
     val resourcesBinding = Binding(classOf[Resources], classOf[BasicResources])
-    
+
     new Kernie(
       resourcesBinding,
       storeWatcher,
