@@ -14,12 +14,20 @@
  * limitations under the License.
  */
 
-package com.ckkloverdos.kernie.internal
-
-import scala.collection.mutable
+package com.ckkloverdos.kernie
+package internal
 
 /**
+ * A processed view of the descriptions given in the [[com.ckkloverdos.kernie.Kernie]] constructor.
+ *
+ * @param implClasses Implementation classes
+ * @param bindings Bindings. See [[com.ckkloverdos.kernie.Binding]]
+ * @param instances Service instances
  *
  * @author Christos KK Loverdos <loverdos@gmail.com>
  */
-final case class BindingInfo(implByAPI: mutable.LinkedHashMap[Class[_], Class[_]])
+case class DescriptionInfo(
+  implClasses: collection.Seq[Class[_]],
+  bindings: collection.Seq[Binding[_]],
+  instances: collection.Seq[AnyRef]
+)

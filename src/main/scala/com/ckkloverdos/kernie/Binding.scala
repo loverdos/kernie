@@ -47,8 +47,15 @@ object Binding {
     new Binding[T](api, impl)
   }
 
-  def dynamic[A, B](api: Class[A], impl: Class[B]): Binding[_] = {
+  def dynamicByClass[A, B](api: Class[A], impl: Class[B]): Binding[_] = {
     CheckBinding(api, impl) // I need exceptions early
     new Binding(api, impl.asSubclass(api))
+  }
+
+  def dynamicByName(classLoader: ClassLoader, apiName: String, implName: String): Binding[_] = {
+    val api = loadAPIClass(classLoader, apiName)
+    val impl = loadImplClass(classLoader, implName)
+
+    dynamicByClass(api, impl)
   }
 }

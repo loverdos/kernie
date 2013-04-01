@@ -63,16 +63,19 @@ class StoreWatcher {
 class ATest {
   @Test
   def testA() {
+    val classLoader = Thread.currentThread().getContextClassLoader
+
     val rollerService = new RollerService
     val storeWatcher = new StoreWatcher
     val resourcesBinding = Binding(classOf[Resources], classOf[BasicResources])
 
     new Kernie(
-      resourcesBinding,
+      classLoader,
+      classOf[Resources] -> classOf[BasicResources],
       storeWatcher,
       rollerService
     )
 
-    require(rollerService.resources.isInstanceOf[BasicResources]) // via `resourcesBinding`
+    require(rollerService.resources.isInstanceOf[BasicResources]) // via classOf[Resources] -> classOf[BasicResources]
   }
 }

@@ -28,7 +28,11 @@ import internal._
  *
  * @author Christos KK Loverdos <loverdos@gmail.com>
  */
-class Kernie(items: AnyRef*) {
+class Kernie(classLoader: ClassLoader, descriptions: AnyRef*) {
+  if(classLoader eq null) {
+    throw new KernieException("null ClassLoader")
+  }
+
   // The service instance for a specific service class/type
   private val _serviceByClass = mutable.LinkedHashMap[Class[_], AnyRef]()
 
@@ -46,7 +50,7 @@ class Kernie(items: AnyRef*) {
 
   private val logger = LoggerFactory.getLogger(this.getClass)
 
-  _init(items)
+  _init(descriptions)
 
   def _isFieldToInject(field: Field) =
     field.getAnnotation(classOf[Inject]) ne null
@@ -57,14 +61,7 @@ class Kernie(items: AnyRef*) {
 
     for((service, index) ← initial.zipWithIndex) {
       if(service eq null) {
-        val extraInfo = index match {
-          case 0 ⇒
-            ""
-          case n if n == initial.size - 1 ⇒
-            " (the last one)"
-          case n ⇒
-            " (after %s)".format(initial(n - 1).getClass.getSimpleName)
-        }
+        val extraInfo = extraIndexInfo[AnyRef](initial, index, _.getClass.getSimpleName)
 
         throw new KernieException("Service[%s]%s is null", index, extraInfo)
       }
@@ -238,7 +235,8 @@ class Kernie(items: AnyRef*) {
 
           case None ⇒
             if(cls.isInterface) {
-              throw new KernieException(format + " " + debugContext, args:_*)
+              throw new KernieException(
+                format + " " + debugContext + ". No binding for %s", (args ++ Seq(cls.getSimpleName)):_*)
             }
             else {
               _newInstanceOf(cls, instances, instanceByClass, nest + 1, debugContext, format, args:_*)
@@ -254,7 +252,6 @@ class Kernie(items: AnyRef*) {
   ) {
     val instances = initialServiceInfo.instances
     val instanceByClass = initialServiceInfo.instanceByClass
-    val serviceClasses = dependencyInfo.serviceClasses
     val immediateClassDependencies = dependencyInfo.immediateClassDependencies
     val linearizedDependencies = dependencyInfo.linearizedDependencies
     val implByAPI = bindingInfo.implByAPI
@@ -297,7 +294,7 @@ class Kernie(items: AnyRef*) {
     }
   }
 
-  private def _checkBindings(bindings: Seq[Binding[_]]) {
+  private def _checkMultipleImplementations(bindings: Seq[Binding[_]]) {
     val apiGroups = bindings.groupBy(_.api)
     val duplicateAPIs = apiGroups.filter(_._2.size > 1)
     for((api, classes) ← duplicateAPIs) {
@@ -308,37 +305,130 @@ class Kernie(items: AnyRef*) {
     }
   }
 
-  private def _computeBindingInfo(bindings: Seq[Binding[_]]): BindingInfo = {
-    _checkBindings(bindings)
+  private def _computeAndPostCheckBindingInfo(bindings: Seq[Binding[_]]): BindingInfo = {
+    _checkMultipleImplementations(bindings)
 
     val apiAndImpls = bindings.map(_.toUntypedTuple)
-    val apis = bindings.map(_.untypedAPI)
-    val impls = bindings.map(_.untypedImpl)
-
     val implByAPI = mutable.LinkedHashMap[Class[_], Class[_]](apiAndImpls:_*)
-    val apiClasses = mutable.LinkedHashSet[Class[_]](apis:_*)
-    val implClasses = mutable.LinkedHashSet[Class[_]](impls:_*)
 
-    BindingInfo(implByAPI, apiClasses, implClasses)
+    BindingInfo(implByAPI)
   }
 
   private def _logClasses(format: String, serviceClasses: collection.Set[Class[_]]) {
     logger.debug(format.format(serviceClasses.map(_.getSimpleName).mkString(", ")))
   }
 
-  private def _init(descriptions: Seq[AnyRef]) {
-    if(logger.isDebugEnabled) {
-      logger.debug("%s Descriptions: %s".format(descriptions.size, descriptions.mkString(", ")))
+  private def _getDescriptionInfo(descriptions: Seq[AnyRef]): DescriptionInfo = {
+    var implClasses: collection.Seq[Class[_]] = mutable.Seq()
+    var bindings: collection.Seq[Binding[_]] = mutable.Seq()
+    var instances: collection.Seq[AnyRef] = mutable.Seq[AnyRef]()
+
+    @inline def addImplClass(cls: Class[_]) { implClasses +:= cls }
+    @inline def addBinding(binding: Binding[_]) { bindings +:= binding }
+    @inline def addInstance(instance: AnyRef) { instances +:= instance }
+
+    for((description, index) ← descriptions.zipWithIndex) {
+      if(logger.isDebugEnabled) {
+        logger.debug(
+          "Description %s of type %s".format(
+            description,
+            if(description eq null) null else description.getClass)
+        )
+      }
+
+      def atIndexExtraInfo: String =
+        "at index %s%s".format(index, extraIndexInfo[AnyRef](descriptions, index, _.toString))
+
+      def kidding(what: AnyRef) =
+        throw new KernieException("Are you kidding me with %s %s?", what, atIndexExtraInfo)
+
+      description match {
+        case null ⇒
+          throw new KernieException("null description %s", atIndexExtraInfo)
+
+        case instance: java.lang.Number ⇒
+          kidding(instance)
+
+        case cls: Class[_] if cls.isPrimitive ⇒
+          kidding(cls)
+
+        case ex: Throwable ⇒
+          kidding(ex)
+
+        case Tuple2(null, null) ⇒
+          throw new KernieException("Null binding %s", atIndexExtraInfo)
+
+        case Tuple2(api, null) ⇒
+          throw new KernieException("Null implementation binding for %s %s", api, atIndexExtraInfo)
+
+        case Tuple2(null, impl) ⇒
+          throw new KernieException("Null api for implementation %s %s", impl, atIndexExtraInfo)
+
+        case className: CharSequence ⇒
+          val cls = loadImplClass(classLoader, className.toString)
+          addImplClass(cls)
+
+        case cls: Class[_] ⇒
+          addImplClass(cls)
+
+        case binding: Binding[_] ⇒
+          addBinding(binding)
+
+        case t @ Tuple2(apiName: String, implName: String) ⇒
+          Catch {
+            val binding = Binding.dynamicByName(classLoader, apiName, implName)
+            addBinding(binding)
+          } ("Bad binding in description %s", t)
+
+        case t @ Tuple2(api: Class[_], impl: Class[_]) ⇒
+          Catch {
+            val binding = Binding.dynamicByClass(api, impl)
+            addBinding(binding)
+          } ("Bad binding in description %s", t)
+
+        case t @ Tuple2(api: Class[_], implName: String) ⇒
+          Catch {
+            val impl = loadImplClass(classLoader, implName)
+            val binding = Binding.dynamicByClass(api, impl)
+            addBinding(binding)
+          } ("Bad binding in description %s", t)
+
+        case t @ Tuple2(api: Class[_], implInstance: AnyRef) ⇒
+          Catch {
+            val impl = implInstance.getClass
+            val binding = Binding.dynamicByClass(api, impl)
+            addBinding(binding)
+            addInstance(implInstance)
+          } ("Bad binding in description %s",  t)
+
+        case instance: AnyRef if instance.getClass.getName.startsWith("scala.Tuple") ⇒
+          kidding(instance)
+
+        case instance: AnyRef ⇒
+          addInstance(instance)
+      }
     }
 
-    val (bindings0, services) = descriptions.partition(_.isInstanceOf[Binding[_]])
-    val bindings = bindings0.map(_.asInstanceOf[Binding[_]])
-    val bindingInfo = _computeBindingInfo(bindings)
+    DescriptionInfo(
+      implClasses = implClasses,
+      bindings = bindings,
+      instances = instances
+    )
+  }
 
-    val initialServiceInfo = _initialServiceInfoOf(services)
+  private def _init(descriptions: Seq[AnyRef]) {
+    val descriptionInfo = _getDescriptionInfo(descriptions)
+
+    val bindings = descriptionInfo.bindings
+    val instances = descriptionInfo.instances
+    val serviceClasses = descriptionInfo.implClasses
+
+    val bindingInfo = _computeAndPostCheckBindingInfo(bindings)
+
+    val initialServiceInfo = _initialServiceInfoOf(instances)
     val initialServiceClasses = new mutable.LinkedHashSet[Class[_]] ++
-      bindingInfo.implClasses ++
-      initialServiceInfo.instanceByClass.keys
+      initialServiceInfo.instanceByClass.keys ++
+      serviceClasses
     val dependencyInfo = _computeDependencyInfo(initialServiceClasses)
 
     if(logger.isDebugEnabled()) {

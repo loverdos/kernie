@@ -11,8 +11,10 @@ package object kernie {
   final def Catch[A](f: ⇒ A)(format: String, args: Any*): A = {
     try f
     catch {
-      case e: KernieException ⇒
-        throw e
+      case ke: KernieException ⇒
+        val msg = ke.getMessage
+        val thisMsg = format.format(args:_*)
+        throw new KernieException(ke, "%s. %s", thisMsg, msg)
 
       case e: Throwable ⇒
         throw new KernieException(format, args:_*)
@@ -49,5 +51,51 @@ package object kernie {
       api.isAssignableFrom(impl),
       "Implementation %s is incompatible with %s", impl.getName, api.getName
     )
+
+    Check(
+      !impl.isPrimitive,
+      "Implementation %s is primitive", impl.getSimpleName
+    )
+  }
+
+  @inline
+  final def loadClass(classLoader: ClassLoader, name: String, format: String, args: Any*): Class[_] = {
+    try classLoader.loadClass(name)
+    catch {
+      case e: Throwable ⇒
+        throw new KernieException(e, format, args:_*)
+    }
+  }
+
+  final def loadAPIClass(classLoader: ClassLoader, apiName: String): Class[_] =
+    loadClass(
+      classLoader,
+      apiName,
+      "Could not load API class '%s' using %s", apiName, classLoader
+    )
+
+  final def loadImplClass(classLoader: ClassLoader, implName: String): Class[_] = {
+    val cls = loadClass(
+      classLoader,
+      implName,
+      "Could not load implementation class '%s' using %s", implName, classLoader
+    )
+
+    if(cls.isInterface) {
+      throw new KernieException("Implementation class '%s' is an interface", implName)
+    }
+
+    cls
+  }
+
+  final def extraIndexInfo[A](seq: collection.Seq[A], index: Int, formatter: A ⇒ String): String = {
+    index match {
+      case 0 ⇒
+        ""
+      case n if n == seq.size - 1 ⇒
+        " (the last one)"
+      case n ⇒
+        " (after %s)".format(formatter(seq(n - 1)))
+    }
   }
 }
