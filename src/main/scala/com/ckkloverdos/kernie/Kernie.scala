@@ -213,34 +213,59 @@ class Kernie(classLoader: ClassLoader, descriptions: AnyRef*) {
       format: String,
       args: Any*
   ): AnyRef = {
-    val nesting = "  " * nest
     if(logger.isDebugEnabled) {
+      val nesting = "  " * nest
       logger.debug("%sComputing service instance for %s".format(nesting, cls.getSimpleName))
     }
 
+    // See if we already know any service instance for the given class
     instanceByClass.get(cls) match {
       case Some(instance) ⇒
-        // Service has already been computed
+        // Yes, service has already been computed
         instance
 
       case None ⇒
-        implByAPI.get(cls) match {
-          case Some(impl) ⇒
-            // We need an interface, so get the binding
-            if(logger.isDebugEnabled) {
-              logger.debug("%s%s Computing %s for %s".format(nesting, debugContext, impl.getSimpleName, cls.getSimpleName))
-            }
+        // No, we must compute it now
+        if(cls.isInterface) {
+          // It's an interface (API), let's grab the implementation class
+          implByAPI.get(cls) match {
+            case Some(implClass) ⇒
+              // Do we have an instance for the implementation class?
+              instanceByClass.get(implClass) match {
+                case Some(implInstance) ⇒
+                  implInstance
 
-            _newInstanceOf(impl, instances, instanceByClass, nest + 1, debugContext, format, args:_*)
+                case None ⇒
+                  // Nope, so we must create an instance
+                  if(logger.isDebugEnabled) {
+                    val nesting = "  " * nest
+                    logger.debug("%s%s Computing %s for %s".format(
+                      nesting,
+                      debugContext,
+                      implClass.getSimpleName,
+                      cls.getSimpleName))
+                  }
 
-          case None ⇒
-            if(cls.isInterface) {
+                  _newInstanceOf(implClass, instances, instanceByClass, nest + 1, debugContext, format, args:_*)
+              }
+
+            case None ⇒
+              // Signal an error, since we have a missing binding
               throw new KernieException(
                 format + " " + debugContext + ". No binding for %s", (args ++ Seq(cls.getSimpleName)):_*)
-            }
-            else {
-              _newInstanceOf(cls, instances, instanceByClass, nest + 1, debugContext, format, args:_*)
-            }
+          }
+        }
+        else {
+          // It's an implementation class. Just compute the service instance
+          if(logger.isDebugEnabled) {
+            val nesting = "  " * nest
+            logger.debug("%s%s Computing %s".format(
+              nesting,
+              debugContext,
+              cls.getSimpleName))
+          }
+
+          _newInstanceOf(cls, instances, instanceByClass, nest + 1, debugContext, format, args:_*)
         }
     }
   }
