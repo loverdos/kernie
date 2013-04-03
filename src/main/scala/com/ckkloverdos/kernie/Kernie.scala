@@ -33,21 +33,6 @@ class Kernie(classLoader: ClassLoader, descriptions: AnyRef*) {
     throw new KernieException("null ClassLoader")
   }
 
-  // The service instance for a specific service class/type
-  private val _serviceByClass = mutable.LinkedHashMap[Class[_], AnyRef]()
-
-  // The set of singleton services
-  private val _services = mutable.LinkedHashSet[AnyRef]()
-  // The service provider of each service (by the service class)
-  private var _providerByClass = Map[Class[_], AnyRef]()
-  // The dependencies of each service
-  private var _serviceClassDependencies = Map[Class[_], Set[Class[_]]]()
-  private var _linearizedClassDependencies = List[Class[_]]()
-  // The fields each singleton service needs to be injected
-  private var _fieldsToInjectByInstance = Map[AnyRef, List[Field]]()
-  // The reflective fields (along with their respective instances) that are of the same type
-  private var _fieldsOfTheSameType = Map[Class[_], List[(Field, AnyRef)]]()
-
   private val logger = LoggerFactory.getLogger(this.getClass)
 
   _init(descriptions)
