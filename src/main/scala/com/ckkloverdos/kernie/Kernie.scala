@@ -457,5 +457,6 @@ class Kernie(classLoader: ClassLoader, descriptions: AnyRef*) {
     }
 
     _injectDependencies(initialServiceInfo, bindingInfo, dependencyInfo)
+//    _configureServices()
   }
 }

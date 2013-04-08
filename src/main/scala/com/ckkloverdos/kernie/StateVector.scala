@@ -14,11 +14,12 @@
  * limitations under the License.
  */
 
-package com.ckkloverdos.kernie;
+package com.ckkloverdos.kernie
 
 /**
+ *
  * @author Christos KK Loverdos <loverdos@gmail.com>
  */
-public enum State {
-    STOPPED, CONFIGURED, STARTED, PAUSED
+final case class StateVector(from: State, to: State) {
+  def is(state: State): Boolean = from == state && to == state
 }

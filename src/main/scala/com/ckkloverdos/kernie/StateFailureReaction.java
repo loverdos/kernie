@@ -19,6 +19,6 @@ package com.ckkloverdos.kernie;
 /**
  * @author Christos KK Loverdos <loverdos@gmail.com>
  */
-public enum State {
-    STOPPED, CONFIGURED, STARTED, PAUSED
+public enum StateFailureReaction {
+    Proceed,
 }

@@ -14,11 +14,12 @@
  * limitations under the License.
  */
 
-package com.ckkloverdos.kernie;
+package com.ckkloverdos.kernie
 
 /**
+ *
  * @author Christos KK Loverdos <loverdos@gmail.com>
  */
-public enum State {
-    STOPPED, CONFIGURED, STARTED, PAUSED
+trait Ping {
+  def ping() {}
 }

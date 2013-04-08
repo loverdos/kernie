@@ -14,11 +14,15 @@
  * limitations under the License.
  */
 
-package com.ckkloverdos.kernie;
+package com.ckkloverdos.kernie.util
+
+import org.slf4j.LoggerFactory
 
 /**
+ *
  * @author Christos KK Loverdos <loverdos@gmail.com>
  */
-public enum State {
-    STOPPED, CONFIGURED, STARTED, PAUSED
+trait Logging {
+  @transient
+  protected val logger = LoggerFactory.getLogger(getClass)
 }

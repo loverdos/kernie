@@ -14,11 +14,14 @@
  * limitations under the License.
  */
 
-package com.ckkloverdos.kernie;
+package com.ckkloverdos.kernie
+package app
+
+import com.ckkloverdos.kernie.LifecycleInfo
 
 /**
+ * The singleton service that designates the running application.
+ *
  * @author Christos KK Loverdos <loverdos@gmail.com>
  */
-public enum State {
-    STOPPED, CONFIGURED, STARTED, PAUSED
-}
+trait IApp extends Lifecycle with LifecycleInfo

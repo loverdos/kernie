@@ -14,11 +14,28 @@
  * limitations under the License.
  */
 
-package com.ckkloverdos.kernie;
+package com.ckkloverdos.kernie
 
 /**
+ *
  * @author Christos KK Loverdos <loverdos@gmail.com>
  */
-public enum State {
-    STOPPED, CONFIGURED, STARTED, PAUSED
+trait LifecycleInfo {
+  def is(state: State): Boolean
+
+  def isStarted: Boolean
+
+  def isStopped: Boolean
+
+  def isPaused: Boolean
+
+  def isConfigured: Boolean
+
+  def isConfiguring: Boolean
+
+  def isStarting: Boolean
+
+  def isPausing: Boolean
+
+  def isStopping: Boolean
 }

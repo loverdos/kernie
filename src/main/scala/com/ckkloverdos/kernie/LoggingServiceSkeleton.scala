@@ -14,11 +14,12 @@
  * limitations under the License.
  */
 
-package com.ckkloverdos.kernie;
+package com.ckkloverdos.kernie
+
+import com.ckkloverdos.kernie.util.Logging
 
 /**
+ *
  * @author Christos KK Loverdos <loverdos@gmail.com>
  */
-public enum State {
-    STOPPED, CONFIGURED, STARTED, PAUSED
-}
+trait LoggingServiceSkeleton extends ServiceSkeleton with Logging
