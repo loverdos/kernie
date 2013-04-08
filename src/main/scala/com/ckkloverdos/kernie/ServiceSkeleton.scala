@@ -15,6 +15,7 @@
  */
 
 package com.ckkloverdos.kernie
+import State._
 
 /**
  *
@@ -32,14 +33,6 @@ trait ServiceSkeleton extends Lifecycle with LifecycleInfo {
   def stop() {}
 
   final def is(state: State) = stateActions.is(state)
-
-  final def isStopped = stateActions.isStopped
-
-  final def isConfigured = stateActions.isConfigured
-
-  final def isStarted = stateActions.isStarted
-
-  final def isPaused = stateActions.isPaused
 
   final def isStopping = stateActions.isStopping
 

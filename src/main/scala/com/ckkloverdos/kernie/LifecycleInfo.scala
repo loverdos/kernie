@@ -16,6 +16,8 @@
 
 package com.ckkloverdos.kernie
 
+import com.ckkloverdos.kernie.State.{PAUSED, STARTED, CONFIGURED, STOPPED}
+
 /**
  *
  * @author Christos KK Loverdos <loverdos@gmail.com>
@@ -23,13 +25,13 @@ package com.ckkloverdos.kernie
 trait LifecycleInfo {
   def is(state: State): Boolean
 
-  def isStarted: Boolean
+  final def isStopped = is(STOPPED)
 
-  def isStopped: Boolean
+  final def isConfigured = is(CONFIGURED)
 
-  def isPaused: Boolean
+  final def isStarted = is(STARTED)
 
-  def isConfigured: Boolean
+  final def isPaused = is(PAUSED)
 
   def isConfiguring: Boolean
 

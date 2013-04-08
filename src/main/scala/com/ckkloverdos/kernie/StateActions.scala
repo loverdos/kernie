@@ -42,14 +42,6 @@ final case class StateActions(stateVector: AtomicReference[StateVector]) extends
 
   def is(state: State): Boolean = vector is state
 
-  def isStarted: Boolean = this is STARTED
-
-  def isStopped: Boolean = this is STOPPED
-
-  def isPaused: Boolean = this is PAUSED
-
-  def isConfigured: Boolean = this is CONFIGURED
-
   def isStarting: Boolean = vector match {
     case StateVector(from, STARTED) if from != STARTED ⇒
       true
