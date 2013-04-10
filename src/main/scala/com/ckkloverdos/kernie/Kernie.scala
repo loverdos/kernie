@@ -33,7 +33,8 @@ class Kernie(classLoader: ClassLoader, descriptions: AnyRef*) {
     throw new KernieException("null ClassLoader")
   }
 
-  private val logger = LoggerFactory.getLogger(this.getClass)
+  private[this] val logger = LoggerFactory.getLogger(this.getClass)
+  private[this] var _injectionInfo: InjectionInfo = _
 
   _init(descriptions)
 
@@ -259,7 +260,8 @@ class Kernie(classLoader: ClassLoader, descriptions: AnyRef*) {
     initialServiceInfo: InitialServiceInfo,
     bindingInfo: BindingInfo,
     dependencyInfo: DependencyInfo
-  ) {
+  ): InjectionInfo = {
+
     val instances = initialServiceInfo.instances
     val instanceByClass = initialServiceInfo.instanceByClass
     val immediateClassDependencies = dependencyInfo.immediateClassDependencies
@@ -302,6 +304,14 @@ class Kernie(classLoader: ClassLoader, descriptions: AnyRef*) {
         field.set(clsInstance, fieldValue)
       }("Could not set field [%s:] %s of %s", field.getName, fieldType.getSimpleName, cls.getSimpleName)
     }
+
+    InjectionInfo(
+      instances = instances,
+      instanceByClass = instanceByClass,
+      immediateClassDependencies = immediateClassDependencies,
+      linearizedDependencies = linearizedDependencies,
+      implByAPI = implByAPI
+    )
   }
 
   private def _checkMultipleImplementations(bindings: Seq[Binding[_]]) {
@@ -456,7 +466,30 @@ class Kernie(classLoader: ClassLoader, descriptions: AnyRef*) {
       )
     }
 
-    _injectDependencies(initialServiceInfo, bindingInfo, dependencyInfo)
+    this._injectionInfo = _injectDependencies(initialServiceInfo, bindingInfo, dependencyInfo)
 //    _configureServices()
+  }
+
+  def serviceByAPI[T](apiClass: Class[T]): T = {
+    if(apiClass eq null) {
+      throw new KernieException("null interface")
+    }
+    else if(!apiClass.isInterface) {
+      throw new KernieException("%s is not an interface", apiClass)
+    }
+
+    this._injectionInfo.implByAPI.get(apiClass) match {
+      case Some(implClass) ⇒
+        this._injectionInfo.instanceByClass.get(implClass) match {
+          case Some(instance) ⇒
+            instance.asInstanceOf[T]
+
+          case None ⇒
+            throw new KernieException("No instance found for %s implementing %s", implClass, apiClass)
+        }
+
+      case None ⇒
+        throw new KernieException("No implementation class found for %s", apiClass)
+    }
   }
 }

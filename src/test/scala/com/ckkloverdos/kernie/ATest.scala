@@ -69,13 +69,19 @@ class ATest {
     val storeWatcher = new StoreWatcher
     val resourcesBinding = Binding(classOf[Resources], classOf[BasicResources])
 
-    new Kernie(
+    val kernie = new Kernie(
       classLoader,
       classOf[Resources] -> classOf[BasicResources],
       storeWatcher,
       rollerService
     )
 
-    require(rollerService.resources.isInstanceOf[BasicResources]) // via classOf[Resources] -> classOf[BasicResources]
+    val resourcesOfRollerService = rollerService.resources
+    println("resourcesOfRollerService = " + resourcesOfRollerService)
+    require(resourcesOfRollerService.isInstanceOf[BasicResources]) // via classOf[Resources] -> classOf[BasicResources]
+
+    val resourcesByAPI = kernie.serviceByAPI(classOf[Resources])
+    println("resourcesByAPI = " + resourcesByAPI)
+    require(resourcesByAPI eq resourcesOfRollerService)
   }
 }
