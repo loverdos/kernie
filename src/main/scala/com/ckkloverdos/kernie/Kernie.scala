@@ -400,8 +400,9 @@ class Kernie(classLoader: ClassLoader, descriptions: AnyRef*) {
             addBinding(binding)
           } ("Bad binding in description %s", t)
 
-        case t @ Tuple2(api: Class[_], impl: Class[_]) ⇒
+        case t @ Tuple2(apiName: String, impl: Class[_]) ⇒
           Catch {
+            val api = loadAPIClass(classLoader, apiName)
             val binding = Binding.dynamicByClass(api, impl)
             addBinding(binding)
           } ("Bad binding in description %s", t)
@@ -412,6 +413,22 @@ class Kernie(classLoader: ClassLoader, descriptions: AnyRef*) {
             val binding = Binding.dynamicByClass(api, impl)
             addBinding(binding)
           } ("Bad binding in description %s", t)
+
+        case t @ Tuple2(apiName: String, implInstance: AnyRef) ⇒
+          Catch {
+            val api = loadAPIClass(classLoader, apiName)
+            val impl = implInstance.getClass
+            val binding = Binding.dynamicByClass(api, impl)
+            addBinding(binding)
+            addInstance(implInstance)
+          } ("Bad binding in description %s", t)
+
+        case t @ Tuple2(api: Class[_], impl: Class[_]) ⇒
+          Catch {
+            val binding = Binding.dynamicByClass(api, impl)
+            addBinding(binding)
+          } ("Bad binding in description %s", t)
+
 
         case t @ Tuple2(api: Class[_], implInstance: AnyRef) ⇒
           Catch {
