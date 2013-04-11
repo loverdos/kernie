@@ -17,7 +17,7 @@ package object kernie {
         throw new KernieException(ke, "%s. %s", thisMsg, msg)
 
       case e: Throwable ⇒
-        throw new KernieException(format, args:_*)
+        throw new KernieException(e, format, args:_*)
     }
   }
 
