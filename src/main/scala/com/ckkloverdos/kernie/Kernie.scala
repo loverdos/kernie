@@ -80,7 +80,7 @@ class Kernie(classLoader: ClassLoader, descriptions: AnyRef*) {
         filter(_isFieldToInject).
         map(field ⇒ {
           field.setAccessible(true)
-          logger.debug("%sMust inject [%s:] %s into %s".format(
+          logger.debug("%sMust inject '%s' %s into %s".format(
             "  " * nest,
             field.getName,
             field.getType.getSimpleName,
@@ -275,7 +275,7 @@ class Kernie(classLoader: ClassLoader, descriptions: AnyRef*) {
       fieldType = field.getType
     } {
       if(logger.isDebugEnabled) {
-        logger.debug("Injecting [%s:] %s into %s".format(field.getName, fieldType.getSimpleName, cls.getSimpleName))
+        logger.debug("Injecting '%s' %s into %s".format(field.getName, fieldType.getSimpleName, cls.getSimpleName))
       }
 
       val clsInstance = _computeServiceInstance(
@@ -302,7 +302,7 @@ class Kernie(classLoader: ClassLoader, descriptions: AnyRef*) {
 
       Catch {
         field.set(clsInstance, fieldValue)
-      }("Could not set field [%s:] %s of %s", field.getName, fieldType.getSimpleName, cls.getSimpleName)
+      }("Could not set field '%s' %s of %s", field.getName, fieldType.getSimpleName, cls.getSimpleName)
     }
 
     InjectionInfo(
@@ -343,18 +343,15 @@ class Kernie(classLoader: ClassLoader, descriptions: AnyRef*) {
     var bindings: collection.Seq[Binding[_]] = mutable.Seq()
     var instances: collection.Seq[AnyRef] = mutable.Seq[AnyRef]()
 
-    @inline def addImplClass(cls: Class[_]) { implClasses +:= cls }
-    @inline def addBinding(binding: Binding[_]) { bindings +:= binding }
-    @inline def addInstance(instance: AnyRef) { instances +:= instance }
+    def addImplClass(cls: Class[_]) { implClasses +:= cls }
+    def addBinding(binding: Binding[_]) {
+      addImplClass(binding.impl.asInstanceOf[Class[_]])
+      bindings +:= binding
+      logger.debug("%s".format(binding))
+    }
+    def addInstance(instance: AnyRef) { instances +:= instance }
 
     for((description, index) ← descriptions.zipWithIndex) {
-      if(logger.isDebugEnabled) {
-        logger.debug(
-          "Description %s of type %s".format(
-            description,
-            if(description eq null) null else description.getClass)
-        )
-      }
 
       def atIndexExtraInfo: String =
         "at index %s%s".format(index, extraIndexInfo[AnyRef](descriptions, index, _.toString))
@@ -453,6 +450,75 @@ class Kernie(classLoader: ClassLoader, descriptions: AnyRef*) {
     )
   }
 
+  private def _runLifecycleActionOnInstance(
+      instance: AnyRef,
+      actionName: String,
+      run: Lifecycle ⇒ Unit
+  ) {
+    instance match {
+      case instance: Lifecycle ⇒
+        val serviceClass = instance.getClass
+        val serviceClassName = serviceClass.getSimpleName
+        logger.debug("Running %s on instance of %s".format(actionName, serviceClassName))
+        Catch(run(instance))("Error running %s on instance of %s", actionName, serviceClassName)
+
+      case _ ⇒
+    }
+  }
+
+  private def _getInjectedInstance(
+      cls: Class[_],
+      instanceByClass: mutable.LinkedHashMap[Class[_], AnyRef],
+      implByAPI: mutable.LinkedHashMap[Class[_], Class[_]]
+  ): Option[AnyRef] = {
+
+    // Gets an injected instance for the given class.
+    // Note that the class may be either an interface or an implementation,
+    // so this is a two-step procedure
+    instanceByClass.get(cls) match {
+      case someInstance @ Some(_) ⇒
+        someInstance
+
+      case None ⇒
+        implByAPI.get(cls) match {
+          case Some(implClass) ⇒
+            instanceByClass.get(implClass)
+
+          case None ⇒
+            None
+        }
+    }
+  }
+
+  private def _runLifecycleActionOnAll(injectionInfo: InjectionInfo, actionName: String, run: Lifecycle ⇒ Unit) {
+    import injectionInfo.{linearizedDependencies, instanceByClass, implByAPI}
+
+    for {
+      serviceClass ← linearizedDependencies
+    } {
+
+      _getInjectedInstance(serviceClass, instanceByClass, implByAPI) match {
+        case None ⇒
+          throw new KernieException(
+            "Could not find an instance of %s to run %s",
+            serviceClass.getSimpleName,
+            actionName
+          )
+
+        case Some(instance) ⇒
+          _runLifecycleActionOnInstance(instance, actionName, run)
+      }
+    }
+  }
+
+  private def _configureServices(injectionInfo: InjectionInfo) {
+    _runLifecycleActionOnAll(injectionInfo, "configure()", _.configure())
+  }
+
+  private def _startServices(injectionInfo: InjectionInfo) {
+    _runLifecycleActionOnAll(injectionInfo, "start()", _.start())
+  }
+
   private def _init(descriptions: Seq[AnyRef]) {
     val descriptionInfo = _getDescriptionInfo(descriptions)
 
@@ -466,6 +532,10 @@ class Kernie(classLoader: ClassLoader, descriptions: AnyRef*) {
     val initialServiceClasses = new mutable.LinkedHashSet[Class[_]] ++
       initialServiceInfo.instanceByClass.keys ++
       serviceClasses
+    if(logger.isDebugEnabled()) {
+      logger.debug("I have %s service classes for which to compute dependencies".format(initialServiceClasses.size))
+    }
+
     val dependencyInfo = _computeDependencyInfo(initialServiceClasses)
 
     if(logger.isDebugEnabled()) {
@@ -474,20 +544,38 @@ class Kernie(classLoader: ClassLoader, descriptions: AnyRef*) {
       val newServiceClasses = dependencyInfo.serviceClasses -- initialServiceClasses
       _logClasses("New: %s", newServiceClasses)
 
-      logger.debug("Linearized dependencies: %s".format(
-        dependencyInfo.
-          linearizedDependencies.
+      logger.debug("%s Linearized dependencies: %s".format(
+        dependencyInfo.linearizedDependencies.size,
+        dependencyInfo.linearizedDependencies.
           map(_.getSimpleName).
           zipWithIndex.map{case (a, b) ⇒ (b, a)}.
           mkString(", "))
       )
     }
 
-    this._injectionInfo = _injectDependencies(initialServiceInfo, bindingInfo, dependencyInfo)
-//    _configureServices()
+    val injectionInfo = _injectDependencies(initialServiceInfo, bindingInfo, dependencyInfo)
+
+    _configureServices(injectionInfo)
+    _startServices(injectionInfo)
+
+    this._injectionInfo = injectionInfo
   }
 
-  def serviceByAPI[T](apiClass: Class[T]): T = {
+  // This is a generalization of serviceInstanceOfInterface
+  def serviceInstanceOf[T](cls: Class[T]): T = {
+    val instanceByClass = this._injectionInfo.instanceByClass
+    val implByAPI = this._injectionInfo.implByAPI
+
+    _getInjectedInstance(cls, instanceByClass, implByAPI) match {
+      case Some(instance) ⇒
+        instance.asInstanceOf[T]
+
+      case None ⇒
+        throw new KernieException("No service instance found for %s", cls)
+    }
+  }
+
+  def serviceOfInterface[T](apiClass: Class[T]): T = {
     if(apiClass eq null) {
       throw new KernieException("null interface")
     }

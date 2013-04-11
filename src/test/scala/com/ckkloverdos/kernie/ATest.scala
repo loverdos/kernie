@@ -80,8 +80,12 @@ class ATest {
     println("resourcesOfRollerService = " + resourcesOfRollerService)
     require(resourcesOfRollerService.isInstanceOf[BasicResources]) // via classOf[Resources] -> classOf[BasicResources]
 
-    val resourcesByAPI = kernie.serviceByAPI(classOf[Resources])
+    val resourcesByAPI = kernie.serviceOfInterface(classOf[Resources])
     println("resourcesByAPI = " + resourcesByAPI)
     require(resourcesByAPI eq resourcesOfRollerService)
+
+    val resourcesInstance = kernie.serviceInstanceOf(classOf[Resources])
+    val basicResourcesInstance = kernie.serviceInstanceOf(classOf[BasicResources])
+    require(resourcesInstance eq basicResourcesInstance)
   }
 }
