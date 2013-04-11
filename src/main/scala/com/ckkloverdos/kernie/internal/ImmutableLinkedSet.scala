@@ -21,10 +21,10 @@ package com.ckkloverdos.kernie.internal
  *
  * @author Christos KK Loverdos <loverdos@gmail.com>
  */
-final class LinkedSet[T](elems: Vector[T], set: Set[T]) {
+final class ImmutableLinkedSet[T](elems: Vector[T], set: Set[T]) {
   def this(t: T) = this(Vector(t), Set(t))
 
-  def +(t: T) = new LinkedSet(elems :+ t, set + t)
+  def +(t: T) = new ImmutableLinkedSet(elems :+ t, set + t)
   def contains(t: T) = set.contains(t)
   def map[U](f: T ⇒ U) = elems.map(f)
 }

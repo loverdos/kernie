@@ -27,7 +27,7 @@ trait Resources {
   def getResourceEx(path: String): StreamResource
 }
 
-class BasicResources extends Resources {
+class BasicResources extends Resources with ServiceSkeleton {
   val SlashEtcResourceContext = new FileStreamResourceContext("/etc/any")
 
   def getResource(path: String) = SlashEtcResourceContext.getResource(path)
@@ -80,7 +80,7 @@ class ATest {
     println("resourcesOfRollerService = " + resourcesOfRollerService)
     require(resourcesOfRollerService.isInstanceOf[BasicResources]) // via classOf[Resources] -> classOf[BasicResources]
 
-    val resourcesByAPI = kernie.serviceOfInterface(classOf[Resources])
+    val resourcesByAPI = kernie.serviceInstanceOfInterface(classOf[Resources])
     println("resourcesByAPI = " + resourcesByAPI)
     require(resourcesByAPI eq resourcesOfRollerService)
 

@@ -113,7 +113,7 @@ class Kernie(classLoader: ClassLoader, descriptions: AnyRef*) {
 
     def explore(
         cls: Class[_],
-        path: LinkedSet[Class[_]],
+        path: ImmutableLinkedSet[Class[_]],
         deps: mutable.LinkedHashSet[Class[_]],
         nest: Int
     ) {
@@ -159,7 +159,7 @@ class Kernie(classLoader: ClassLoader, descriptions: AnyRef*) {
     for {
       cls ← serviceClasses
     } {
-      explore(cls, new LinkedSet(cls), linearizedDeps, 0)
+      explore(cls, new ImmutableLinkedSet(cls), linearizedDeps, 0)
     }
 
     DependencyInfo(
@@ -492,6 +492,10 @@ class Kernie(classLoader: ClassLoader, descriptions: AnyRef*) {
 
   private def _runLifecycleActionOnAll(injectionInfo: InjectionInfo, actionName: String, run: Lifecycle ⇒ Unit) {
     import injectionInfo.{linearizedDependencies, instanceByClass, implByAPI}
+    // We need this because service classes are registered either as interfaces or implementation classes,
+    // so the same instance will be found if we query either for the interface or the implementation
+    // of a binding
+    val alreadyRun = mutable.LinkedHashSet.empty[AnyRef]
 
     for {
       serviceClass ← linearizedDependencies
@@ -506,9 +510,14 @@ class Kernie(classLoader: ClassLoader, descriptions: AnyRef*) {
           )
 
         case Some(instance) ⇒
-          _runLifecycleActionOnInstance(instance, actionName, run)
+          if(!alreadyRun(instance)) {
+            _runLifecycleActionOnInstance(instance, actionName, run)
+            alreadyRun += instance
+          }
       }
     }
+
+    alreadyRun.clear()
   }
 
   private def _configureServices(injectionInfo: InjectionInfo) {
@@ -575,7 +584,7 @@ class Kernie(classLoader: ClassLoader, descriptions: AnyRef*) {
     }
   }
 
-  def serviceOfInterface[T](apiClass: Class[T]): T = {
+  def serviceInstanceOfInterface[T](apiClass: Class[T]): T = {
     if(apiClass eq null) {
       throw new KernieException("null interface")
     }
