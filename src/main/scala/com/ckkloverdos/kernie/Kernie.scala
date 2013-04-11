@@ -16,11 +16,11 @@
 
 package com.ckkloverdos.kernie
 
+import internal._
 import java.lang.reflect.Field
 import javax.inject.Inject
-import org.slf4j.LoggerFactory
 import scala.collection.mutable
-import internal._
+import com.ckkloverdos.kernie.log.KernieLogger
 
 
 /**
@@ -28,17 +28,27 @@ import internal._
  *
  * @author Christos KK Loverdos <loverdos@gmail.com>
  */
-class Kernie(classLoader: ClassLoader, descriptions: AnyRef*) {
+class Kernie(
+    logger: KernieLogger,
+    classLoader: ClassLoader,
+    descriptions: AnyRef*
+) {
   if(classLoader eq null) {
     throw new KernieException("null ClassLoader")
   }
 
-  private[this] val logger = LoggerFactory.getLogger(this.getClass)
   private[this] var _injectionInfo: InjectionInfo = _
 
   _init(descriptions)
 
-  def _isFieldToInject(field: Field) =
+  private def LOG(fmt: String, args: Any*) {
+    if(logger ne null) {
+      try logger.log(fmt, args:_*)
+      catch { case _: Throwable ⇒ }
+    }
+  }
+
+  private def _isFieldToInject(field: Field) =
     field.getAnnotation(classOf[Inject]) ne null
 
   private def _initialServiceInfoOf(initial: Seq[AnyRef]): InitialServiceInfo = {
@@ -80,12 +90,12 @@ class Kernie(classLoader: ClassLoader, descriptions: AnyRef*) {
         filter(_isFieldToInject).
         map(field ⇒ {
           field.setAccessible(true)
-          logger.debug("%sMust inject '%s' %s into %s".format(
+          LOG("%sMust inject '%s' %s into %s",
             "  " * nest,
             field.getName,
             field.getType.getSimpleName,
             cls.getSimpleName
-          ))
+          )
 
           field
         }).
@@ -117,20 +127,17 @@ class Kernie(classLoader: ClassLoader, descriptions: AnyRef*) {
         deps: mutable.LinkedHashSet[Class[_]],
         nest: Int
     ) {
+      val nesting = "  " * nest
       if(explored.contains(cls)) {
-        if(logger.isDebugEnabled) {
-          logger.debug("%sAlready explored %s".format("  " * nest, cls.getSimpleName))
-        }
+        LOG("%sAlready explored %s", nesting, cls.getSimpleName)
         return
       }
 
-      if(logger.isDebugEnabled) {
-        logger.debug("%sExploring %s, path is %s".format(
-          "  " * nest,
-          cls.getSimpleName,
-          path.map(_.getSimpleName).mkString(" -> "))
-        )
-      }
+      LOG("%sExploring %s, path is %s",
+        nesting,
+        cls.getSimpleName,
+        path.map(_.getSimpleName).mkString(" -> ")
+      )
 
       val immediateDeps = _immediateDependenciesOf(cls, nest + 1)
       allImmediateClassDependencies += cls -> immediateDeps
@@ -178,10 +185,7 @@ class Kernie(classLoader: ClassLoader, descriptions: AnyRef*) {
       format: String,
       args: Any*
   ): AnyRef = {
-    if(logger.isDebugEnabled) {
-      val nesting = "  " * nest
-      logger.debug("%s%s Instantiating %s".format(nesting, debugContext, cls.getSimpleName))
-    }
+    LOG("%s%s Instantiating %s", "  " * nest, debugContext, cls.getSimpleName)
 
     val instance = Catch(cls.newInstance().asInstanceOf[AnyRef])(format, args: _*)
     instances += instance
@@ -199,10 +203,8 @@ class Kernie(classLoader: ClassLoader, descriptions: AnyRef*) {
       format: String,
       args: Any*
   ): AnyRef = {
-    if(logger.isDebugEnabled) {
-      val nesting = "  " * nest
-      logger.debug("%sComputing service instance for %s".format(nesting, cls.getSimpleName))
-    }
+    val nesting = "  " * nest
+    LOG("%sComputing service instance for %s", nesting, cls.getSimpleName)
 
     // See if we already know any service instance for the given class
     instanceByClass.get(cls) match {
@@ -223,14 +225,12 @@ class Kernie(classLoader: ClassLoader, descriptions: AnyRef*) {
 
                 case None ⇒
                   // Nope, so we must create an instance
-                  if(logger.isDebugEnabled) {
-                    val nesting = "  " * nest
-                    logger.debug("%s%s Computing %s for %s".format(
-                      nesting,
-                      debugContext,
-                      implClass.getSimpleName,
-                      cls.getSimpleName))
-                  }
+                  LOG("%s%s Computing %s for %s",
+                    nesting,
+                    debugContext,
+                    implClass.getSimpleName,
+                    cls.getSimpleName
+                  )
 
                   _newInstanceOf(implClass, instances, instanceByClass, nest + 1, debugContext, format, args:_*)
               }
@@ -243,13 +243,11 @@ class Kernie(classLoader: ClassLoader, descriptions: AnyRef*) {
         }
         else {
           // It's an implementation class. Just compute the service instance
-          if(logger.isDebugEnabled) {
-            val nesting = "  " * nest
-            logger.debug("%s%s Computing %s".format(
-              nesting,
-              debugContext,
-              cls.getSimpleName))
-          }
+          LOG("%s%s Computing %s",
+            nesting,
+            debugContext,
+            cls.getSimpleName
+          )
 
           _newInstanceOf(cls, instances, instanceByClass, nest + 1, debugContext, format, args:_*)
         }
@@ -274,9 +272,7 @@ class Kernie(classLoader: ClassLoader, descriptions: AnyRef*) {
       field ← clsDeps.fieldsToInject
       fieldType = field.getType
     } {
-      if(logger.isDebugEnabled) {
-        logger.debug("Injecting '%s' %s into %s".format(field.getName, fieldType.getSimpleName, cls.getSimpleName))
-      }
+      LOG("Injecting '%s' %s into %s", field.getName, fieldType.getSimpleName, cls.getSimpleName)
 
       val clsInstance = _computeServiceInstance(
         cls,
@@ -335,7 +331,7 @@ class Kernie(classLoader: ClassLoader, descriptions: AnyRef*) {
   }
 
   private def _logClasses(format: String, serviceClasses: collection.Set[Class[_]]) {
-    logger.debug(format.format(serviceClasses.map(_.getSimpleName).mkString(", ")))
+    LOG(format, serviceClasses.map(_.getSimpleName).mkString(", "))
   }
 
   private def _getDescriptionInfo(descriptions: Seq[AnyRef]): DescriptionInfo = {
@@ -347,7 +343,7 @@ class Kernie(classLoader: ClassLoader, descriptions: AnyRef*) {
     def addBinding(binding: Binding[_]) {
       addImplClass(binding.impl.asInstanceOf[Class[_]])
       bindings +:= binding
-      logger.debug("%s".format(binding))
+      LOG("%s", binding)
     }
     def addInstance(instance: AnyRef) { instances +:= instance }
 
@@ -459,7 +455,7 @@ class Kernie(classLoader: ClassLoader, descriptions: AnyRef*) {
       case instance: Lifecycle ⇒
         val serviceClass = instance.getClass
         val serviceClassName = serviceClass.getSimpleName
-        logger.debug("Running %s on instance of %s".format(actionName, serviceClassName))
+        LOG("Running %s on instance of %s", actionName, serviceClassName)
         Catch(run(instance))("Error running %s on instance of %s", actionName, serviceClassName)
 
       case _ ⇒
@@ -517,6 +513,8 @@ class Kernie(classLoader: ClassLoader, descriptions: AnyRef*) {
       }
     }
 
+    LOG("Successfully ran %s on % instances", actionName, alreadyRun.size)
+
     alreadyRun.clear()
   }
 
@@ -541,26 +539,22 @@ class Kernie(classLoader: ClassLoader, descriptions: AnyRef*) {
     val initialServiceClasses = new mutable.LinkedHashSet[Class[_]] ++
       initialServiceInfo.instanceByClass.keys ++
       serviceClasses
-    if(logger.isDebugEnabled()) {
-      logger.debug("I have %s service classes for which to compute dependencies".format(initialServiceClasses.size))
-    }
+    LOG("I have %s service classes for which to compute dependencies", initialServiceClasses.size)
 
     val dependencyInfo = _computeDependencyInfo(initialServiceClasses)
 
-    if(logger.isDebugEnabled()) {
-      _logClasses("Initial: %s", initialServiceClasses)
+    _logClasses("Initial: %s", initialServiceClasses)
 
-      val newServiceClasses = dependencyInfo.serviceClasses -- initialServiceClasses
-      _logClasses("New: %s", newServiceClasses)
+    val newServiceClasses = dependencyInfo.serviceClasses -- initialServiceClasses
+    _logClasses("New: %s", newServiceClasses)
 
-      logger.debug("%s Linearized dependencies: %s".format(
-        dependencyInfo.linearizedDependencies.size,
-        dependencyInfo.linearizedDependencies.
-          map(_.getSimpleName).
-          zipWithIndex.map{case (a, b) ⇒ (b, a)}.
-          mkString(", "))
-      )
-    }
+    LOG("%s Linearized dependencies: %s",
+      dependencyInfo.linearizedDependencies.size,
+      dependencyInfo.linearizedDependencies.
+        map(_.getSimpleName).
+        zipWithIndex.map{case (a, b) ⇒ (b, a)}.
+        mkString(", ")
+    )
 
     val injectionInfo = _injectDependencies(initialServiceInfo, bindingInfo, dependencyInfo)
 

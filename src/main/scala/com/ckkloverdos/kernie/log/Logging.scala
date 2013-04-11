@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.ckkloverdos.kernie.util
+package com.ckkloverdos.kernie.log
 
 import org.slf4j.LoggerFactory
 

@@ -16,7 +16,7 @@
 
 package com.ckkloverdos.kernie
 
-import com.ckkloverdos.kernie.util.Logging
+import com.ckkloverdos.kernie.log.Logging
 
 /**
  *

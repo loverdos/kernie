@@ -21,6 +21,7 @@ import com.ckkloverdos.resource.{StreamResource, FileStreamResourceContext}
 import javax.inject.Inject
 import org.junit.Test
 import junit.framework.TestCase
+import com.ckkloverdos.kernie.log.SLF4JKernieLogger
 
 trait Resources {
   def getResource(path: String): Maybe[StreamResource]
@@ -70,6 +71,7 @@ class ATest {
     val resourcesBinding = Binding(classOf[Resources], classOf[BasicResources])
 
     val kernie = new Kernie(
+      SLF4JKernieLogger,
       classLoader,
       classOf[Resources] -> classOf[BasicResources],
       storeWatcher,
