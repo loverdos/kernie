@@ -28,7 +28,7 @@ import com.ckkloverdos.kernie.log.KernieLogger
  *
  * @author Christos KK Loverdos <loverdos@gmail.com>
  */
-class Kernie(
+final class Kernie(
     logger: KernieLogger,
     classLoader: ClassLoader,
     descriptions: AnyRef*
@@ -599,5 +599,11 @@ class Kernie(
       case None ⇒
         throw new KernieException("No implementation class found for %s", apiClass)
     }
+  }
+
+  def bindings: List[Binding[_]] = {
+    this._injectionInfo.implByAPI.map {
+      case (api, impl) ⇒ Binding.dynamicByClass(api, impl)
+    }.toList
   }
 }
