@@ -566,6 +566,10 @@ final class Kernie(
 
   // This is a generalization of serviceInstanceOfInterface
   def serviceInstanceOf[T](cls: Class[T]): T = {
+    if(cls eq null) {
+      throw new KernieException("null class")
+    }
+
     val instanceByClass = this._injectionInfo.instanceByClass
     val implByAPI = this._injectionInfo.implByAPI
 
@@ -601,9 +605,6 @@ final class Kernie(
     }
   }
 
-  def bindings: List[Binding[_]] = {
-    this._injectionInfo.implByAPI.map {
-      case (api, impl) ⇒ Binding.dynamicByClass(api, impl)
-    }.toList
-  }
+  def bindings: List[Binding[_]] =
+    this._injectionInfo.implByAPI.map(Binding.dynamicByClass).toList
 }

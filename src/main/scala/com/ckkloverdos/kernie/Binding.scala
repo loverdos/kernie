@@ -52,10 +52,16 @@ object Binding {
     new Binding(api, impl.asSubclass(api))
   }
 
+  def dynamicByClass(api_impl: (Class[_], Class[_])): Binding[_] =
+    dynamicByClass(api_impl._1, api_impl._2)
+
   def dynamicByName(classLoader: ClassLoader, apiName: String, implName: String): Binding[_] = {
     val api = loadAPIClass(classLoader, apiName)
     val impl = loadImplClass(classLoader, implName)
 
     dynamicByClass(api, impl)
   }
+
+  def dynamicByName(classLoader: ClassLoader, apiName_implName: (String, String)): Binding[_] =
+    dynamicByName(classLoader, apiName_implName._1, apiName_implName._1)
 }
