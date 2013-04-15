@@ -37,19 +37,39 @@ final class Kernie(
     throw new KernieException("Logger is null. Use EmptyKernieLogger if you want no logging")
   }
   if(classLoader eq null) {
-    throw new KernieException("null ClassLoader")
+    throw new KernieException("ClassLoader is null")
   }
 
   private[this] var _servicesConfigured = false
   private[this] var _servicesStarted = false
+  private[this] var _timeInInit = 0L
+  private[this] var _timeInConfigure = 0L
+  private[this] var _timeInStart = 0L
+
   private[this] var _injectionInfo: InjectionInfo = _
 
   _init(descriptions)
 
-  private[this] final val _log_ = logger ne null
+  private def DEBUG(fmt: String, args: Any*): Boolean = {
+    try logger.debug(fmt, args:_*)
+    catch { case _: Throwable ⇒ }
+    true
+  }
 
-  private def LOG(fmt: String, args: Any*): Boolean = {
-    try logger.log(fmt, args:_*)
+  private def INFO(fmt: String, args: Any*): Boolean = {
+    try logger.info(fmt, args:_*)
+    catch { case _: Throwable ⇒ }
+    true
+  }
+
+  private def WARN(fmt: String, args: Any*): Boolean = {
+    try logger.warn(fmt, args:_*)
+    catch { case _: Throwable ⇒ }
+    true
+  }
+
+  private def ERROR(e: Throwable, fmt: String, args: Any*): Boolean = {
+    try logger.error(e, fmt, args:_*)
     catch { case _: Throwable ⇒ }
     true
   }
@@ -96,7 +116,7 @@ final class Kernie(
         filter(_isFieldToInject).
         map(field ⇒ {
           field.setAccessible(true)
-          _log_ && LOG("%sMust inject %s into %s [%s]",
+          DEBUG("%sMust inject %s into %s [%s]",
             "  " * nest,
             field.getType.getSimpleName,
             cls.getSimpleName,
@@ -135,11 +155,11 @@ final class Kernie(
     ) {
       val nesting = "  " * nest
       if(explored.contains(cls)) {
-        _log_ && LOG("%sAlready explored %s", nesting, cls.getSimpleName)
+        DEBUG("%sAlready explored %s", nesting, cls.getSimpleName)
         return
       }
 
-      _log_ && LOG("%sExploring %s, path is %s",
+      DEBUG("%sExploring %s, path is %s",
         nesting,
         cls.getSimpleName,
         path.map(_.getSimpleName).mkString(" -> ")
@@ -191,7 +211,7 @@ final class Kernie(
       format: String,
       args: Any*
   ): AnyRef = {
-    _log_ && LOG("%s%s Instantiating %s", "  " * nest, debugContext, cls.getSimpleName)
+    DEBUG("%s%s Instantiating %s", "  " * nest, debugContext, cls.getSimpleName)
 
     val instance = Catch(cls.newInstance().asInstanceOf[AnyRef])(format, args: _*)
     instances += instance
@@ -210,7 +230,7 @@ final class Kernie(
       args: Any*
   ): AnyRef = {
     val nesting = "  " * nest
-    _log_ && LOG("%sComputing service instance for %s", nesting, cls.getSimpleName)
+    DEBUG("%sComputing service instance for %s", nesting, cls.getSimpleName)
 
     // See if we already know any service instance for the given class
     instanceByClass.get(cls) match {
@@ -231,7 +251,7 @@ final class Kernie(
 
                 case None ⇒
                   // Nope, so we must create an instance
-                  _log_ && LOG("%s%s Computing %s for %s",
+                  DEBUG("%s%s Computing %s for %s",
                     nesting,
                     debugContext,
                     implClass.getSimpleName,
@@ -249,7 +269,7 @@ final class Kernie(
         }
         else {
           // It's an implementation class. Just compute the service instance
-          _log_ && LOG("%s%s Computing %s",
+          DEBUG("%s%s Computing %s",
             nesting,
             debugContext,
             cls.getSimpleName
@@ -278,7 +298,7 @@ final class Kernie(
       field ← clsDeps.fieldsToInject
       fieldType = field.getType
     } {
-      _log_ && LOG("Injecting %s into %s [%s]", fieldType.getSimpleName, cls.getSimpleName, field.getName)
+      DEBUG("Injecting %s into %s [%s]", fieldType.getSimpleName, cls.getSimpleName, field.getName)
 
       val clsInstance = _computeServiceInstance(
         cls,
@@ -337,7 +357,7 @@ final class Kernie(
   }
 
   private def _logClasses(format: String, serviceClasses: collection.Set[Class[_]]): Boolean = {
-    LOG(format, serviceClasses.map(_.getSimpleName).mkString(", "))
+    INFO(format, serviceClasses.map(_.getSimpleName).mkString(", "))
   }
 
   private def _getDescriptionInfo(descriptions: Seq[AnyRef]): DescriptionInfo = {
@@ -349,7 +369,7 @@ final class Kernie(
     def addBinding(binding: Binding[_]) {
       addImplClass(binding.impl.asInstanceOf[Class[_]])
       bindings +:= binding
-      _log_ && LOG("%s", binding)
+      DEBUG("%s", binding)
     }
     def addInstance(instance: AnyRef) { instances +:= instance }
 
@@ -445,6 +465,13 @@ final class Kernie(
       }
     }
 
+    {
+      INFO(
+        "%s bindings, %s service instances, %s implementation classes",
+        bindings.size,
+        instances.size,
+        implClasses.size)
+    }
     DescriptionInfo(
       implClasses = implClasses,
       bindings = bindings,
@@ -461,7 +488,7 @@ final class Kernie(
       case instance: Lifecycle ⇒
         val serviceClass = instance.getClass
         val serviceClassName = serviceClass.getSimpleName
-        _log_ && LOG("Running %s on instance of %s", actionName, serviceClassName)
+        DEBUG("Running %s on instance of %s", actionName, serviceClassName)
         Catch(run(instance))("Error running %s on instance of %s", actionName, serviceClassName)
 
       case _ ⇒
@@ -519,7 +546,7 @@ final class Kernie(
       }
     }
 
-    _log_ && LOG("Successfully ran %s on % instances", actionName, alreadyRun.size)
+    DEBUG("Successfully ran %s on % instances", actionName, alreadyRun.size)
 
     alreadyRun.clear()
   }
@@ -533,6 +560,8 @@ final class Kernie(
   }
 
   private def _init(descriptions: Seq[AnyRef]) {
+    val startTime = System.currentTimeMillis()
+
     val descriptionInfo = _getDescriptionInfo(descriptions)
 
     val bindings = descriptionInfo.bindings
@@ -545,18 +574,18 @@ final class Kernie(
     val initialServiceClasses = new mutable.LinkedHashSet[Class[_]] ++
       initialServiceInfo.instanceByClass.keys ++
       serviceClasses
-    _log_ && LOG("I have %s service classes for which to compute dependencies", initialServiceClasses.size)
+    INFO("I have %s service classes for which to compute dependencies", initialServiceClasses.size)
 
     val dependencyInfo = _computeDependencyInfo(initialServiceClasses)
 
-    _log_ && _logClasses("Initial: %s", initialServiceClasses)
+    _logClasses("Initial: %s", initialServiceClasses)
 
     val newServiceClasses = dependencyInfo.serviceClasses -- initialServiceClasses
 
-    _log_ && {
+    {
       _logClasses("New: %s", newServiceClasses)
 
-      LOG("%s Linearized dependencies: %s",
+      INFO("%s Linearized dependencies: %s",
         dependencyInfo.linearizedDependencies.size,
         dependencyInfo.linearizedDependencies.
           map(_.getSimpleName).
@@ -566,6 +595,9 @@ final class Kernie(
     }
 
     this._injectionInfo = _injectDependencies(initialServiceInfo, bindingInfo, dependencyInfo)
+
+    this._timeInInit = System.currentTimeMillis() - startTime
+    INFO("Kernie initialized in %.3f sec", 0.001 * this._timeInInit.toDouble)
   }
 
   def configureServices() {
@@ -573,8 +605,13 @@ final class Kernie(
       throw new KernieException("Already configured")
     }
 
+    val startTime = System.currentTimeMillis()
+
     _configureServices(this._injectionInfo)
     this._servicesConfigured = true
+
+    this._timeInConfigure = System.currentTimeMillis() - startTime
+    INFO("Services configured in %.3f sec", 0.001 * this._timeInConfigure.toDouble)
   }
 
   def startServices() {
@@ -582,8 +619,15 @@ final class Kernie(
       throw new KernieException("Already started")
     }
 
+    val startTime = System.currentTimeMillis()
+
     _startServices(this._injectionInfo)
     this._servicesStarted = true
+
+    this._timeInStart = System.currentTimeMillis() - startTime
+    INFO("Services started in %.3f sec", 0.001 * this._timeInStart.toDouble)
+    val totalTime = this._timeInInit + this._timeInConfigure + this._timeInStart
+    INFO("Total time to start services is %.3f sec", 0.001 * totalTime.toDouble)
   }
 
   // This is a generalization of serviceInstanceOfInterface

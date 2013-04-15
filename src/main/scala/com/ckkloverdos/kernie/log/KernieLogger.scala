@@ -6,5 +6,8 @@ package com.ckkloverdos.kernie.log
  * @author Christos KK Loverdos <loverdos@gmail.com>
  */
 trait KernieLogger {
-  def log(fmt: String, args: Any*)
+  def debug(fmt: String, args: Any*)
+  def info(fmt: String, args: Any*)
+  def warn(fmt: String, args: Any*)
+  def error(e: Throwable, fmt: String, args: Any*)
 }
