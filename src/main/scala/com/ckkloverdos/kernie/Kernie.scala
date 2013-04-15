@@ -33,6 +33,9 @@ final class Kernie(
     classLoader: ClassLoader,
     descriptions: AnyRef*
 ) {
+  if(null eq logger) {
+    throw new KernieException("Logger is null. Use EmptyKernieLogger if you want no logging")
+  }
   if(classLoader eq null) {
     throw new KernieException("null ClassLoader")
   }
