@@ -98,4 +98,8 @@ package object kernie {
         " (after %s)".format(formatter(seq(n - 1)))
     }
   }
+
+  @inline final def toBeInjected[A <: AnyRef]: A = null.asInstanceOf[A]
+
+  @inline final def Var[A <: AnyRef]: A = null.asInstanceOf[A]
 }
