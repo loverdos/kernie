@@ -16,12 +16,11 @@
 
 package com.ckkloverdos.kernie
 
-import com.ckkloverdos.maybe.Maybe
+import com.ckkloverdos.kernie.log.SLF4JKernieLogger
+import com.ckkloverdos.maybe.{Just, NoVal, Failed, Maybe}
 import com.ckkloverdos.resource.{StreamResource, FileStreamResourceContext}
 import javax.inject.Inject
 import org.junit.Test
-import junit.framework.TestCase
-import com.ckkloverdos.kernie.log.SLF4JKernieLogger
 
 trait Resources {
   def getResource(path: String): Maybe[StreamResource]
@@ -32,7 +31,12 @@ class BasicResources extends Resources with ServiceSkeleton {
   val SlashEtcResourceContext = new FileStreamResourceContext("/etc/any")
 
   def getResource(path: String) = SlashEtcResourceContext.getResource(path)
-  def getResourceEx(path: String) = SlashEtcResourceContext.getResourceEx(path)
+  def getResourceEx(path: String) =
+    SlashEtcResourceContext.getResource(path) match {
+      case Failed(e) ⇒ throw e
+      case NoVal ⇒ throw new Exception("Not found")
+      case Just(r) ⇒ r
+    }
 }
 
 class SuperResources extends Resources {
